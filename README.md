@@ -8,9 +8,11 @@
 
 When working on a multi-week project with Claude Code, you end up creating dozens of sessions: one for architecture decisions, another for implementing a feature, another to debug a bug, another to write tests. Every time you start a new session, you lose all the context from previous ones and have to re-explain the project, paste docs, and repeat yourself.
 
-`--fork-session` helps, but it's one-directional: the child gets the parent's history, but what the child learns never flows back. Session #5 doesn't know what sessions #2, #3, and #4 discovered.
+But losing context between sessions is only half the problem. The other half is **needing to go back**. You're deep in an implementation session and hit a bug that's related to an architecture decision you made three sessions ago. The only way to get useful help is to switch back to that architecture session, because that's where Claude has the full context of *why* things were designed that way. So you leave your implementation session, scroll through `/resume` trying to find the right one, ask your question there, then switch back and manually relay the answer. This constant session-hopping breaks your flow and wastes time.
 
-**cctree fixes this.** It creates a session tree where knowledge flows in both directions: parent to child (context injection) and child to parent (commit back). Each new session starts with the accumulated wisdom of every session before it.
+`--fork-session` helps with the first problem, but it's one-directional: the child gets the parent's history, but what the child learns never flows back. And it doesn't help with the second problem at all: you still can't query a sibling session's knowledge from where you are.
+
+**cctree fixes both.** It creates a session tree where knowledge flows in both directions: parent to child (context injection) and child to parent (commit back). Each new session starts with the accumulated wisdom of every session before it. And when you need details from a specific sibling session, the `get_sibling_context` tool lets you read its committed summary without leaving your current session.
 
 ## How It Works
 
@@ -104,6 +106,26 @@ cctree branch "API Implementation"        # implement knowing schema + provider
 # ... commit back ...
 cctree branch "Frontend Integration"      # build UI knowing the full API
 ```
+
+### Cross-Session Knowledge Queries
+
+You're implementing API endpoints and hit a problem that relates to an architecture decision from an earlier session. Without cctree, you'd have to leave your current session, find the architecture session via `/resume`, ask your question there, then switch back and relay the answer manually.
+
+With cctree, the architecture session's summary is already in your context. And if you need more detail:
+
+```
+You: I'm getting a circular dependency between the auth middleware and
+     the user service. What did we decide about the dependency graph
+     in the architecture session?
+
+Claude: [uses get_sibling_context with name "Architecture Decisions"]
+        In the architecture session, we decided to use an event-driven
+        pattern to break circular dependencies: the auth middleware
+        publishes a "user.authenticated" event and the user service
+        subscribes to it, rather than direct imports.
+```
+
+No session switching. No copy-pasting. The knowledge from every committed session is queryable from wherever you are.
 
 ### Bug Investigation
 

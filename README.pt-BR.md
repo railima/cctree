@@ -8,9 +8,11 @@
 
 Quando você trabalha em um projeto que dura semanas usando o Claude Code, acaba criando dezenas de sessões: uma para decisões de arquitetura, outra para implementar uma feature, outra para debugar um bug, outra para escrever testes. Cada vez que inicia uma sessão nova, você perde todo o contexto das anteriores e precisa re-explicar o projeto, colar docs e se repetir.
 
-O `--fork-session` ajuda, mas é unidirecional: o filho recebe o histórico do pai, mas o que o filho aprende nunca volta. A sessão #5 não sabe o que as sessões #2, #3 e #4 descobriram.
+Mas perder contexto entre sessões é só metade do problema. A outra metade é **precisar voltar**. Você está no meio de uma sessão de implementação e encontra um bug relacionado a uma decisão de arquitetura que tomou três sessões atrás. A única forma de conseguir ajuda útil é voltar para aquela sessão de arquitetura, porque é lá que o Claude tem o contexto completo de *por que* as coisas foram desenhadas daquele jeito. Então você sai da sessão de implementação, procura a sessão certa no `/resume`, faz a pergunta lá, volta e repassa a resposta manualmente. Essa troca constante de sessões quebra o fluxo e desperdiça tempo.
 
-**O cctree resolve isso.** Ele cria uma árvore de sessões onde o conhecimento flui nas duas direções: pai para filho (injeção de contexto) e filho para pai (commit back). Cada nova sessão já começa com o conhecimento acumulado de todas as sessões anteriores.
+O `--fork-session` ajuda com o primeiro problema, mas é unidirecional: o filho recebe o histórico do pai, mas o que o filho aprende nunca volta. E não ajuda em nada com o segundo problema: você ainda não consegue consultar o conhecimento de uma sessão irmã de onde está.
+
+**O cctree resolve os dois.** Ele cria uma árvore de sessões onde o conhecimento flui nas duas direções: pai para filho (injeção de contexto) e filho para pai (commit back). Cada nova sessão já começa com o conhecimento acumulado de todas as sessões anteriores. E quando você precisa de detalhes de uma sessão irmã específica, a tool `get_sibling_context` permite ler o resumo commitado dela sem sair da sessão atual.
 
 ## Como Funciona
 
@@ -104,6 +106,26 @@ cctree branch "Implementação da API"           # implementar sabendo schema + 
 # ... commit back ...
 cctree branch "Integração Frontend"            # construir UI sabendo a API completa
 ```
+
+### Consultas de Conhecimento Entre Sessões
+
+Você está implementando endpoints da API e encontra um problema relacionado a uma decisão de arquitetura de uma sessão anterior. Sem o cctree, você teria que sair da sessão atual, encontrar a sessão de arquitetura pelo `/resume`, fazer a pergunta lá, voltar e repassar a resposta manualmente.
+
+Com o cctree, o resumo da sessão de arquitetura já está no seu contexto. E se precisar de mais detalhes:
+
+```
+Você: Estou tendo uma dependência circular entre o middleware de auth
+      e o user service. O que decidimos sobre o grafo de dependências
+      na sessão de arquitetura?
+
+Claude: [usa get_sibling_context com nome "Decisões de Arquitetura"]
+        Na sessão de arquitetura, decidimos usar um padrão event-driven
+        para quebrar dependências circulares: o middleware de auth
+        publica um evento "user.authenticated" e o user service se
+        inscreve nele, ao invés de imports diretos.
+```
+
+Sem trocar de sessão. Sem copiar e colar. O conhecimento de cada sessão commitada é consultável de onde você estiver.
 
 ### Investigação de Bug
 
