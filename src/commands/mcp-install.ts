@@ -23,7 +23,7 @@ export async function mcpInstallCommand(options: { scope: string }): Promise<voi
     console.log(`Registering cctree MCP server (scope: ${scope})...`);
     execFileSync(
       'claude',
-      ['mcp', 'add', '--scope', scope, 'cctree', '--', 'npx', '-y', 'cctree', '--server'],
+      ['mcp', 'add', '--scope', scope, 'cctree', '--', 'npx', '-y', '@railima/cctree', '--server'],
       { stdio: 'inherit' },
     );
     console.log('');

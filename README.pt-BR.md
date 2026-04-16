@@ -47,7 +47,7 @@ O pai não é uma sessão do Claude. É um documento gerenciado em disco que cre
 ### Instalação
 
 ```bash
-npm install -g cctree
+npm install -g @railima/cctree
 ```
 
 ### Registrar o servidor MCP (uma vez)

@@ -1,5 +1,5 @@
 {
-  "name": "cctree",
+  "name": "@railima/cctree",
   "version": "0.1.0",
   "description": "Hierarchical session management for Claude Code with bidirectional context flow",
   "type": "module",

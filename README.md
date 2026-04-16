@@ -47,7 +47,7 @@ The parent is not a Claude session. It's a managed document on disk that grows a
 ### Install
 
 ```bash
-npm install -g cctree
+npm install -g @railima/cctree
 ```
 
 ### Register the MCP server (one time)
