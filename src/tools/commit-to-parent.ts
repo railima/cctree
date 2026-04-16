@@ -67,7 +67,7 @@ export function registerCommitToParent(server: McpServer): void {
         'Call this when the user asks to "commit", "save to parent", or "sync back".',
       ].join(' '),
       inputSchema: {
-        summary: z.string().describe(
+        summary: z.string().max(100_000).describe(
           'Structured summary in markdown. Use sections: ## Decisions, ## Artifacts Created, ## Open Questions, ## Next Steps',
         ),
       },

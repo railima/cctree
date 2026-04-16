@@ -13,7 +13,7 @@ import { rebuildContext } from './context-builder.js';
 import type { TreeConfig, ChildSession, ActiveSession } from '../types/index.js';
 
 async function ensureDir(dir: string): Promise<void> {
-  await mkdir(dir, { recursive: true });
+  await mkdir(dir, { recursive: true, mode: 0o700 });
 }
 
 async function fileExists(path: string): Promise<boolean> {
