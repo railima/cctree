@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 
 // When invoked as MCP server (npx cctree --server), skip CLI and start stdio server
 if (process.argv.includes('--server')) {
@@ -79,7 +79,11 @@ program
 program
   .command('mcp-install')
   .description('Register the cctree MCP server with Claude Code')
-  .option('-s, --scope <scope>', 'MCP scope: local, project, or user', 'user')
+  .addOption(
+    new Option('-s, --scope <scope>', 'MCP scope')
+      .choices(['local', 'project', 'user'])
+      .default('user'),
+  )
   .action(async (options: { scope: string }) => {
     const { mcpInstallCommand } = await import('./commands/mcp-install.js');
     await mcpInstallCommand(options);

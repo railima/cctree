@@ -1,10 +1,17 @@
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
+
+const VALID_SCOPES = ['local', 'project', 'user'] as const;
 
 export async function mcpInstallCommand(options: { scope: string }): Promise<void> {
   const scope = options.scope;
 
+  if (!VALID_SCOPES.includes(scope as typeof VALID_SCOPES[number])) {
+    console.error(`Invalid scope "${scope}". Must be one of: ${VALID_SCOPES.join(', ')}`);
+    process.exit(1);
+  }
+
   try {
-    execSync('claude mcp get cctree', { stdio: 'pipe' });
+    execFileSync('claude', ['mcp', 'get', 'cctree'], { stdio: 'pipe' });
     console.log('cctree MCP server is already registered.');
     console.log('To reinstall, first run: claude mcp remove cctree');
     return;
@@ -13,9 +20,12 @@ export async function mcpInstallCommand(options: { scope: string }): Promise<voi
   }
 
   try {
-    const cmd = `claude mcp add --scope ${scope} cctree -- npx -y cctree --server`;
     console.log(`Registering cctree MCP server (scope: ${scope})...`);
-    execSync(cmd, { stdio: 'inherit' });
+    execFileSync(
+      'claude',
+      ['mcp', 'add', '--scope', scope, 'cctree', '--', 'npx', '-y', 'cctree', '--server'],
+      { stdio: 'inherit' },
+    );
     console.log('');
     console.log('Done. The cctree tools are now available inside Claude Code sessions.');
   } catch (err) {
