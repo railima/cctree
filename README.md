@@ -2,7 +2,7 @@
 
 **Hierarchical session management for [Claude Code](https://claude.ai/code) with bidirectional context flow.**
 
-> [Leia em Portugues](README.pt-BR.md)
+> [Leia em Português](README.pt-BR.md)
 
 ## The Problem
 
