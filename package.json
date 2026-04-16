@@ -1,0 +1,78 @@
+{
+  "name": "cctree",
+  "version": "0.1.0",
+  "description": "Hierarchical session management for Claude Code with bidirectional context flow",
+  "type": "module",
+  "bin": {
+    "cctree": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsup",
+    "postbuild": "chmod +x dist/cli.js",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "session-management",
+    "mcp",
+    "context",
+    "ai",
+    "developer-tools"
+  ],
+  "author": "railima",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/railima/cctree.git"
+  },
+  "homepage": "https://github.com/railima/cctree#readme",
+  "bugs": {
+    "url": "https://github.com/railima/cctree/issues"
+  },
+  "dependencies": {
+    "commander": "^14.0.3"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@types/node": "^22.10.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0",
+    "zod": "^3.24.0"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": ">=1.12.0",
+    "zod": ">=3.24.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  }
+}
