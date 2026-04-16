@@ -1,5 +1,10 @@
 import { Command } from 'commander';
 
+// When invoked as MCP server (npx cctree --server), skip CLI and start stdio server
+if (process.argv.includes('--server')) {
+  await import('./server.js');
+} else {
+
 const program = new Command();
 
 program
@@ -81,3 +86,5 @@ program
   });
 
 await program.parseAsync(process.argv);
+
+} // end else (CLI mode)
