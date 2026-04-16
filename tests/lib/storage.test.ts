@@ -95,6 +95,23 @@ describe('createTree', () => {
     const tree = await createTree('Empty', TEST_DIR, []);
     expect(tree.initial_context_files).toEqual([]);
   });
+
+  it('throws for names that produce empty slugs', async () => {
+    await expect(createTree('...', TEST_DIR, [])).rejects.toThrow('alphanumeric');
+    await expect(createTree('////', TEST_DIR, [])).rejects.toThrow('alphanumeric');
+  });
+
+  it('rejects context files outside working directory', async () => {
+    await expect(
+      createTree('Escape', TEST_DIR, ['../../etc/passwd']),
+    ).rejects.toThrow('outside the working directory');
+  });
+
+  it('rejects absolute context file paths outside cwd', async () => {
+    await expect(
+      createTree('Absolute', TEST_DIR, ['/etc/hosts']),
+    ).rejects.toThrow('outside the working directory');
+  });
 });
 
 describe('activeTree', () => {

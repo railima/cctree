@@ -25,16 +25,25 @@ async function fileExists(path: string): Promise<boolean> {
   }
 }
 
+function assertValidSlug(slug: string, label: string): void {
+  if (!slug || !/^[a-z0-9][a-z0-9-]*$/.test(slug)) {
+    throw new Error(
+      `Invalid ${label}: "${slug}". Must contain at least one alphanumeric character.`,
+    );
+  }
+}
+
 export async function createTree(
   name: string,
   cwd: string,
   contextFiles: string[],
 ): Promise<TreeConfig> {
   const slug = toSlug(name);
+  assertValidSlug(slug, 'tree name');
   const root = treePath(slug);
 
   if (await fileExists(treeJsonPath(slug))) {
-    throw new Error(`Tree "${name}" already exists at ${root}`);
+    throw new Error(`Tree "${name}" already exists.`);
   }
 
   await ensureDir(root);
@@ -44,6 +53,12 @@ export async function createTree(
   const copiedFiles: string[] = [];
   for (const file of contextFiles) {
     const absPath = resolve(cwd, file);
+    const resolvedCwd = resolve(cwd);
+    if (!absPath.startsWith(resolvedCwd + '/') && absPath !== resolvedCwd) {
+      throw new Error(
+        `Context file "${file}" resolves outside the working directory. Use files within your project.`,
+      );
+    }
     const fileName = basename(absPath);
     const dest = resolve(initialContextDir(slug), fileName);
     await cp(absPath, dest);
@@ -67,6 +82,7 @@ export async function createTree(
 }
 
 export async function loadTree(slug: string): Promise<TreeConfig> {
+  assertValidSlug(slug, 'tree slug');
   const path = treeJsonPath(slug);
   if (!(await fileExists(path))) {
     throw new Error(`Tree "${slug}" not found. Run "cctree init" to create one.`);
@@ -104,6 +120,7 @@ export async function setActiveTree(slug: string): Promise<void> {
 }
 
 export async function addChild(treeSlug: string, child: ChildSession): Promise<void> {
+  assertValidSlug(child.slug, 'session name');
   const config = await loadTree(treeSlug);
 
   const exists = config.children.some((c) => c.slug === child.slug);
