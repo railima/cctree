@@ -280,6 +280,33 @@ cctree use "Payment Integration"
 cctree use payment-integration
 ```
 
+### `cctree statusline [--format <template>]`
+
+Print a compact single-line summary of the current cctree session. Intended for Claude Code's custom [status line](https://code.claude.com/docs/en/statusline), tmux, or any other shell-composed status display. The command prints nothing (and exits 0) when there is no active cctree session, so it composes cleanly with other statusline segments.
+
+```bash
+cctree statusline
+# Output: Auth Service v2 › API Design
+
+cctree statusline --format '{tree_slug}/{child_slug} [{committed}/{total}]'
+# Output: auth-service-v2/api-design [2/5]
+```
+
+Placeholders: `{tree}`, `{tree_slug}`, `{child}`, `{child_slug}`, `{committed}`, `{active}`, `{total}`.
+
+When Claude Code pipes its [session JSON](https://code.claude.com/docs/en/statusline#available-data) to the command on stdin, `cctree statusline` uses the `session_name` field (populated by `cctree branch` via `--name`) to resolve the tree/child. This means you can have multiple concurrent Claude sessions and each statusline will show the correct tree. When stdin is absent, it falls back to `~/.cctree/active-session.json`.
+
+Register it in `~/.claude/settings.json`:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "cctree statusline"
+  }
+}
+```
+
 ### `cctree mcp-install [--scope <scope>]`
 
 Register the cctree MCP server with Claude Code.

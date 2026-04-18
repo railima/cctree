@@ -87,6 +87,18 @@ program
   });
 
 program
+  .command('statusline')
+  .description('Print a compact status line (for Claude Code statusline, tmux, etc.)')
+  .option(
+    '-f, --format <template>',
+    'format template; placeholders: {tree}, {tree_slug}, {child}, {child_slug}, {committed}, {active}, {total}',
+  )
+  .action(async (options: { format?: string }) => {
+    const { statuslineCommand } = await import('./commands/statusline.js');
+    await statuslineCommand(options);
+  });
+
+program
   .command('mcp-install')
   .description('Register the cctree MCP server with Claude Code')
   .addOption(
