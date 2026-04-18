@@ -81,6 +81,57 @@ export async function createTree(
   return config;
 }
 
+export async function addContextFiles(
+  treeSlug: string,
+  cwd: string,
+  files: string[],
+): Promise<{ added: string[]; tree: TreeConfig }> {
+  const config = await loadTree(treeSlug);
+
+  await ensureDir(initialContextDir(treeSlug));
+
+  const resolvedCwd = resolve(cwd);
+  const added: string[] = [];
+
+  for (const file of files) {
+    const absPath = resolve(cwd, file);
+    if (!absPath.startsWith(resolvedCwd + '/') && absPath !== resolvedCwd) {
+      throw new Error(
+        `Context file "${file}" resolves outside the working directory. Use files within your project.`,
+      );
+    }
+    const fileName = basename(absPath);
+    const dest = resolve(initialContextDir(treeSlug), fileName);
+    await cp(absPath, dest);
+    added.push(fileName);
+  }
+
+  const merged = new Set(config.initial_context_files);
+  for (const name of added) merged.add(name);
+  config.initial_context_files = [...merged];
+
+  await saveTree(config);
+  await rebuildContext(treeSlug);
+
+  return { added, tree: config };
+}
+
+export async function resolveTree(nameOrSlug: string): Promise<TreeConfig> {
+  const trees = await listTrees();
+  const slug = toSlug(nameOrSlug);
+  const lower = nameOrSlug.toLowerCase();
+  const match = trees.find(
+    (t) => t.slug === slug || t.slug === lower || t.name.toLowerCase() === lower,
+  );
+  if (!match) {
+    const available = trees.length
+      ? `\nAvailable trees:\n${trees.map((t) => `  - ${t.name} (${t.slug})`).join('\n')}`
+      : '';
+    throw new Error(`Tree "${nameOrSlug}" not found.${available}`);
+  }
+  return match;
+}
+
 export async function loadTree(slug: string): Promise<TreeConfig> {
   assertValidSlug(slug, 'tree slug');
   const path = treeJsonPath(slug);

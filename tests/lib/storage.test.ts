@@ -40,6 +40,8 @@ import {
   findChildByNameOrSlug,
   writeActiveSession,
   readActiveSession,
+  addContextFiles,
+  resolveTree,
 } from '../../src/lib/storage.js';
 import type { ChildSession } from '../../src/types/index.js';
 
@@ -260,6 +262,100 @@ describe('findChildByNameOrSlug', () => {
     const tree = await createTree('Tree', TEST_DIR, []);
     const found = await findChildByNameOrSlug(tree, 'nope');
     expect(found).toBeNull();
+  });
+});
+
+describe('addContextFiles', () => {
+  it('copies files into initial-context and updates the config', async () => {
+    const cwd = join(TEST_DIR, 'fixtures');
+    await mkdir(cwd, { recursive: true });
+    await writeFile(join(cwd, 'spec.md'), '# Spec');
+    await createTree('Later', cwd, []);
+
+    await writeFile(join(cwd, 'plan.md'), '# Plan');
+    const { added, tree } = await addContextFiles('later', cwd, ['spec.md', 'plan.md']);
+
+    expect(added).toEqual(['spec.md', 'plan.md']);
+    expect(tree.initial_context_files).toEqual(['spec.md', 'plan.md']);
+
+    const spec = await readFile(
+      join(TEST_DIR, 'trees', 'later', 'initial-context', 'spec.md'),
+      'utf-8',
+    );
+    expect(spec).toBe('# Spec');
+  });
+
+  it('rebuilds context.md to include the new files', async () => {
+    const cwd = join(TEST_DIR, 'fixtures');
+    await mkdir(cwd, { recursive: true });
+    await createTree('Ctx', cwd, []);
+    await writeFile(join(cwd, 'notes.md'), 'hello world');
+
+    await addContextFiles('ctx', cwd, ['notes.md']);
+
+    const ctx = await readFile(
+      join(TEST_DIR, 'trees', 'ctx', 'context.md'),
+      'utf-8',
+    );
+    expect(ctx).toContain('## Initial Context');
+    expect(ctx).toContain('### notes.md');
+    expect(ctx).toContain('hello world');
+  });
+
+  it('dedupes when the same filename is added twice', async () => {
+    const cwd = join(TEST_DIR, 'fixtures');
+    await mkdir(cwd, { recursive: true });
+    await writeFile(join(cwd, 'doc.md'), 'v1');
+    await createTree('Dedupe', cwd, ['doc.md']);
+
+    await writeFile(join(cwd, 'doc.md'), 'v2');
+    const { tree } = await addContextFiles('dedupe', cwd, ['doc.md']);
+
+    expect(tree.initial_context_files).toEqual(['doc.md']);
+    const copied = await readFile(
+      join(TEST_DIR, 'trees', 'dedupe', 'initial-context', 'doc.md'),
+      'utf-8',
+    );
+    expect(copied).toBe('v2');
+  });
+
+  it('rejects files outside the working directory', async () => {
+    await createTree('Guarded', TEST_DIR, []);
+    await expect(
+      addContextFiles('guarded', TEST_DIR, ['../../etc/passwd']),
+    ).rejects.toThrow('outside the working directory');
+  });
+
+  it('rejects absolute paths outside cwd', async () => {
+    await createTree('Abs', TEST_DIR, []);
+    await expect(
+      addContextFiles('abs', TEST_DIR, ['/etc/hosts']),
+    ).rejects.toThrow('outside the working directory');
+  });
+
+  it('throws for unknown tree slug', async () => {
+    await expect(
+      addContextFiles('does-not-exist', TEST_DIR, []),
+    ).rejects.toThrow('not found');
+  });
+});
+
+describe('resolveTree', () => {
+  it('resolves by exact slug', async () => {
+    await createTree('Alpha One', TEST_DIR, []);
+    const tree = await resolveTree('alpha-one');
+    expect(tree.name).toBe('Alpha One');
+  });
+
+  it('resolves by name (case-insensitive)', async () => {
+    await createTree('Beta Two', TEST_DIR, []);
+    const tree = await resolveTree('BETA TWO');
+    expect(tree.slug).toBe('beta-two');
+  });
+
+  it('throws with available trees listed when not found', async () => {
+    await createTree('Alpha', TEST_DIR, []);
+    await expect(resolveTree('missing')).rejects.toThrow(/not found[\s\S]*alpha/i);
   });
 });
 
