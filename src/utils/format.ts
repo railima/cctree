@@ -27,7 +27,7 @@ function shortDate(iso: string): string {
 export function formatTree(tree: TreeConfig, isActive: boolean): string {
   const lines: string[] = [];
   const activeTag = isActive ? ` ${CYAN}(active)${RESET}` : '';
-  lines.push(`${BOLD}${tree.name}${RESET}${activeTag}`);
+  lines.push(`${BOLD}${tree.name}${RESET} ${DIM}(${tree.slug})${RESET}${activeTag}`);
 
   const children = tree.children;
   for (let i = 0; i < children.length; i++) {
@@ -47,7 +47,7 @@ export function formatTree(tree: TreeConfig, isActive: boolean): string {
 
 export function formatTreePlain(tree: TreeConfig): string {
   const lines: string[] = [];
-  lines.push(tree.name);
+  lines.push(`${tree.name} (${tree.slug})`);
 
   for (let i = 0; i < tree.children.length; i++) {
     const child = tree.children[i];

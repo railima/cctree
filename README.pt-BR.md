@@ -210,12 +210,14 @@ cctree list --all     # mostra todas as trees
 
 Saída:
 ```
-Auth Service v2 (active)
+Auth Service v2 (auth-service-v2) (active)
 ├── [committed] Pesquisa de Arquitetura (Apr 16)
 ├── [committed] Schema do Banco (Apr 17)
 ├── [active]    Implementação da API
 └── [abandoned] Abordagem Antiga
 ```
+
+O slug entre parênteses é o que você pode passar para `cctree use` ou `cctree resume`.
 
 ### `cctree status`
 
@@ -286,13 +288,13 @@ cctree init "Integração de Pagamentos" --context docs/payment-spec.md
 cctree init "Sprint Performance Q3" --context docs/perf-targets.md
 
 cctree list --all
-# Auth Service v2
+# Auth Service v2 (auth-service-v2)
 #     (no sessions yet)
 #
-# Integração de Pagamentos
+# Integração de Pagamentos (integracao-de-pagamentos)
 #     (no sessions yet)
 #
-# Sprint Performance Q3 (active)
+# Sprint Performance Q3 (sprint-performance-q3) (active)
 #     (no sessions yet)
 
 cctree use "Auth Service v2"          # troca de contexto
@@ -324,7 +326,7 @@ while IFS=, read -r key summary; do
 done < <(tail -n +2 tickets.csv)
 
 cctree list
-# Auth Service v2 (active)
+# Auth Service v2 (auth-service-v2) (active)
 # ├── [active] AUTH-101: Token refresh flow
 # ├── [active] AUTH-102: Session management
 # └── [active] AUTH-103: SSO integration
