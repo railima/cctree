@@ -1,4 +1,8 @@
+import { createRequire } from 'node:module';
 import { Command, Option } from 'commander';
+
+const require = createRequire(import.meta.url);
+const { version } = require('../package.json') as { version: string };
 
 // When invoked as MCP server (npx cctree --server), skip CLI and start stdio server
 if (process.argv.includes('--server')) {
@@ -10,7 +14,7 @@ const program = new Command();
 program
   .name('cctree')
   .description('Hierarchical session management for Claude Code')
-  .version('0.1.0');
+  .version(version);
 
 program
   .command('init')
