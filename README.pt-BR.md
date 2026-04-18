@@ -230,6 +230,21 @@ cctree context          # imprime no terminal
 cctree context --raw    # markdown puro (útil para piping)
 ```
 
+### `cctree context add <arquivos...> [--tree <nome>]`
+
+Adiciona arquivos de contexto inicial a uma tree já existente. Útil quando você
+esqueceu de passar `--context` no `cctree init` ou quando docs novos se tornam
+relevantes depois da tree ser criada.
+
+```bash
+cctree context add spec.md plan.md               # adiciona na tree ativa
+cctree context add spec.md --tree auth-service   # adiciona em uma tree específica
+```
+
+- Copia os arquivos para `~/.cctree/trees/<slug>/initial-context/`
+- Atualiza o `tree.json` e regera o `context.md`
+- Sessões futuras (`cctree branch` / `cctree resume`) vão incluir os novos arquivos
+
 ### `cctree use <nome>`
 
 Troca a tree ativa.

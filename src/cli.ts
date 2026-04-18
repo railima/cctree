@@ -58,13 +58,23 @@ program
     await statusCommand();
   });
 
-program
+const context = program
   .command('context')
   .description('Print the accumulated context')
   .option('--raw', 'output raw markdown without paging')
   .action(async (options: { raw?: boolean }) => {
     const { contextCommand } = await import('./commands/context.js');
     await contextCommand(options);
+  });
+
+context
+  .command('add')
+  .description('Add initial-context files to an existing tree')
+  .argument('<files...>', 'files to copy into the tree\'s initial-context dir')
+  .option('-t, --tree <name>', 'target tree (name or slug); defaults to active tree')
+  .action(async (files: string[], options: { tree?: string }) => {
+    const { contextAddCommand } = await import('./commands/context.js');
+    await contextAddCommand(files, options);
   });
 
 program
