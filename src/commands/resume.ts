@@ -29,12 +29,16 @@ export async function resumeCommand(name: string): Promise<void> {
     await writeActiveSession({ tree: tree.slug, child: child.slug });
 
     console.log(`Resuming "${child.claude_session_name}"...`);
+    if (child.worktree) {
+      console.log(`  Worktree: ${child.worktree.path}`);
+    }
     console.log('');
 
     const args = ['--resume', child.claude_session_name];
 
     const child_process = spawn('claude', args, {
       stdio: 'inherit',
+      cwd: child.worktree?.path ?? tree.cwd,
       env: {
         ...process.env,
         CCTREE_TREE: tree.slug,

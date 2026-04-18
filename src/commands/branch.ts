@@ -1,4 +1,6 @@
 import { spawn } from 'node:child_process';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { toSlug } from '../utils/slug.js';
 import { rebuildContext } from '../lib/context-builder.js';
 import {
@@ -6,18 +8,56 @@ import {
   addChild,
   writeActiveSession,
 } from '../lib/storage.js';
-import { injectContextPath } from '../lib/config.js';
-import { writeFile } from 'node:fs/promises';
-import type { ChildSession } from '../types/index.js';
+import { injectContextPath, worktreePath } from '../lib/config.js';
+import {
+  createWorktree,
+  isGitRepo,
+  revParseHead,
+} from '../lib/git.js';
+import type { ChildSession, WorktreeInfo } from '../types/index.js';
+
+export interface BranchOptions {
+  open: boolean;
+  worktree?: string | boolean;
+}
+
+async function setupWorktree(
+  treeCwd: string,
+  treeSlug: string,
+  childSlug: string,
+  branchOverride?: string,
+): Promise<WorktreeInfo> {
+  if (!(await isGitRepo(treeCwd))) {
+    throw new Error(
+      `Cannot create worktree: "${treeCwd}" is not a git repository. Run \`git init\` in the tree's working directory first.`,
+    );
+  }
+
+  const branch = branchOverride ?? `cctree/${treeSlug}/${childSlug}`;
+  const path = worktreePath(treeSlug, childSlug);
+  const baseRef = await revParseHead(treeCwd);
+
+  await mkdir(dirname(path), { recursive: true, mode: 0o700 });
+  await createWorktree({ repoCwd: treeCwd, path, branch, baseRef });
+
+  return { path, branch, base_ref: baseRef };
+}
 
 export async function branchCommand(
   name: string,
-  options: { open: boolean },
+  options: BranchOptions,
 ): Promise<void> {
   try {
     const tree = await getActiveTreeOrFail();
     const slug = toSlug(name);
     const sessionName = `${tree.name} > ${name}`;
+
+    let worktree: WorktreeInfo | undefined;
+    if (options.worktree) {
+      const branchOverride =
+        typeof options.worktree === 'string' ? options.worktree : undefined;
+      worktree = await setupWorktree(tree.cwd, tree.slug, slug, branchOverride);
+    }
 
     const child: ChildSession = {
       name,
@@ -25,6 +65,7 @@ export async function branchCommand(
       status: 'active',
       claude_session_name: sessionName,
       created_at: new Date().toISOString(),
+      ...(worktree ? { worktree } : {}),
     };
 
     await addChild(tree.slug, child);
@@ -36,6 +77,10 @@ export async function branchCommand(
     await writeActiveSession({ tree: tree.slug, child: slug });
 
     console.log(`Session "${name}" created in tree "${tree.name}".`);
+    if (worktree) {
+      console.log(`  Worktree: ${worktree.path}`);
+      console.log(`  Branch:   ${worktree.branch}`);
+    }
 
     if (!options.open) {
       console.log('Use "cctree resume <name>" to open it later.');
@@ -53,6 +98,7 @@ export async function branchCommand(
 
     const child_process = spawn('claude', args, {
       stdio: 'inherit',
+      cwd: worktree?.path ?? tree.cwd,
       env: {
         ...process.env,
         CCTREE_TREE: tree.slug,

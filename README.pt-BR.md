@@ -181,13 +181,24 @@ cctree init "Meu Projeto" --context spec.md plano.md arquitetura.md
 cctree init "Investigação Rápida"    # sem arquivos de contexto
 ```
 
-### `cctree branch <nome> [--no-open]`
+### `cctree branch <nome> [--no-open] [--worktree [branch]]`
 
 Cria uma sessão filha e abre o Claude Code.
 
 ```bash
 cctree branch "Design da API"
-cctree branch "Protótipo" --no-open    # cria a entrada sem abrir o Claude
+cctree branch "Protótipo" --no-open             # cria a entrada sem abrir o Claude
+cctree branch "Design da API" --worktree        # isola em um git worktree
+cctree branch "Design da API" -w feature/api    # worktree com branch específica
+```
+
+**Com `--worktree`:** o cctree cria um [git worktree](https://git-scm.com/docs/git-worktree) vinculado em `~/.cctree/trees/<tree-slug>/worktrees/<child-slug>/` apontando para uma branch nova (por padrão `cctree/<tree-slug>/<child-slug>`, criada a partir do `HEAD` atual do diretório de trabalho da tree). O Claude Code abre dentro do worktree, então sessões irmãs podem rodar em paralelo sem atropelar os arquivos umas das outras. `cctree resume` também abre a sessão lá. Se você passar um nome de branch que já existe, ela é checada out no worktree em vez de ser recriada.
+
+Limpeza (por enquanto manual — um comando dedicado virá em um follow-up):
+
+```bash
+git worktree remove ~/.cctree/trees/<tree-slug>/worktrees/<child-slug>
+git branch -D cctree/<tree-slug>/<child-slug>
 ```
 
 ### `cctree resume <nome>`
