@@ -185,19 +185,30 @@ cctree init "Quick Investigation"    # no initial context files
 - Sets this tree as the active tree
 - Generates the initial `context.md`
 
-### `cctree branch <name> [--no-open]`
+### `cctree branch <name> [--no-open] [--worktree [branch]]`
 
 Create a child session and open Claude Code.
 
 ```bash
 cctree branch "API Design"
-cctree branch "Prototype" --no-open    # create entry without opening Claude
+cctree branch "Prototype" --no-open         # create entry without opening Claude
+cctree branch "API Design" --worktree       # isolate in a git worktree
+cctree branch "API Design" -w feature/api   # worktree with a specific branch name
 ```
 
 - Rebuilds `context.md` with all committed siblings
 - Injects context via `--append-system-prompt-file`
 - Opens Claude Code with `--name "TreeName > ChildName"`
 - Writes active session state for MCP tools
+
+**With `--worktree`:** cctree creates a linked [git worktree](https://git-scm.com/docs/git-worktree) at `~/.cctree/trees/<tree-slug>/worktrees/<child-slug>/` on a fresh branch (default name: `cctree/<tree-slug>/<child-slug>`, branched from the current `HEAD` of the tree's working directory). Claude Code launches inside the worktree, so sibling sessions can run in parallel without trampling each other's files. `cctree resume` will also reopen the session there. If the branch name you pass already exists, it's checked out into the worktree instead of being created.
+
+Cleanup (for now, manual — a dedicated command will come in a follow-up):
+
+```bash
+git worktree remove ~/.cctree/trees/<tree-slug>/worktrees/<child-slug>
+git branch -D cctree/<tree-slug>/<child-slug>
+```
 
 ### `cctree resume <name>`
 

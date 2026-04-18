@@ -7,6 +7,12 @@ export interface TreeConfig {
   children: ChildSession[];
 }
 
+export interface WorktreeInfo {
+  path: string;
+  branch: string;
+  base_ref: string;
+}
+
 export interface ChildSession {
   name: string;
   slug: string;
@@ -14,6 +20,7 @@ export interface ChildSession {
   claude_session_name: string;
   created_at: string;
   committed_at?: string;
+  worktree?: WorktreeInfo;
 }
 
 export interface ActiveSession {

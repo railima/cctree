@@ -53,6 +53,27 @@ describe('formatTree', () => {
     expect(out).toContain('Research');
     expect(out).toMatch(/\(Apr 16\)/);
   });
+
+  it('tags children that have an attached worktree', () => {
+    const tree = makeTree({
+      children: [
+        {
+          name: 'API',
+          slug: 'api',
+          status: 'active',
+          claude_session_name: 'Auth Service v2 > API',
+          created_at: '2026-04-18T10:00:00Z',
+          worktree: {
+            path: '/tmp/wt',
+            branch: 'cctree/auth-service-v2/api',
+            base_ref: 'a'.repeat(40),
+          },
+        },
+      ],
+    });
+    const out = stripAnsi(formatTree(tree, false));
+    expect(out).toContain('[worktree: cctree/auth-service-v2/api]');
+  });
 });
 
 describe('formatTreePlain', () => {
@@ -75,5 +96,26 @@ describe('formatTreePlain', () => {
     });
     const out = formatTreePlain(tree);
     expect(out).toContain('[active] Session A');
+  });
+
+  it('tags children with their worktree branch in plain output', () => {
+    const tree = makeTree({
+      children: [
+        {
+          name: 'Session A',
+          slug: 'session-a',
+          status: 'active',
+          claude_session_name: 'X > Session A',
+          created_at: '2026-04-16T10:00:00Z',
+          worktree: {
+            path: '/tmp/wt',
+            branch: 'feature/a',
+            base_ref: 'b'.repeat(40),
+          },
+        },
+      ],
+    });
+    const out = formatTreePlain(tree);
+    expect(out).toContain('[active] Session A [worktree: feature/a]');
   });
 });

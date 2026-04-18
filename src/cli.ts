@@ -27,10 +27,19 @@ program
   .description('Create a child session and open Claude Code')
   .argument('<name>', 'child session name')
   .option('--no-open', 'create the session entry without opening Claude')
-  .action(async (name: string, options: { open: boolean }) => {
-    const { branchCommand } = await import('./commands/branch.js');
-    await branchCommand(name, options);
-  });
+  .option(
+    '-w, --worktree [branch]',
+    'create a git worktree for this session (branch defaults to cctree/<tree>/<child>)',
+  )
+  .action(
+    async (
+      name: string,
+      options: { open: boolean; worktree?: string | boolean },
+    ) => {
+      const { branchCommand } = await import('./commands/branch.js');
+      await branchCommand(name, options);
+    },
+  );
 
 program
   .command('list')

@@ -38,4 +38,12 @@ export function injectContextPath(slug: string): string {
   return join(paths.trees, slug, '.inject-context.md');
 }
 
+export function worktreesDir(slug: string): string {
+  return join(paths.trees, slug, 'worktrees');
+}
+
+export function worktreePath(treeSlug: string, childSlug: string): string {
+  return join(paths.trees, treeSlug, 'worktrees', childSlug);
+}
+
 export const CONTEXT_HOOK_MAX_CHARS = 9500;

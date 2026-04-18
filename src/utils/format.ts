@@ -35,7 +35,10 @@ export function formatTree(tree: TreeConfig, isActive: boolean): string {
     const isLast = i === children.length - 1;
     const connector = isLast ? '\u2514\u2500\u2500' : '\u251C\u2500\u2500';
     const date = child.committed_at ? shortDate(child.committed_at) : shortDate(child.created_at);
-    lines.push(`${connector} [${statusLabel(child.status)}] ${child.name} ${DIM}(${date})${RESET}`);
+    const worktreeTag = child.worktree ? ` ${DIM}[worktree: ${child.worktree.branch}]${RESET}` : '';
+    lines.push(
+      `${connector} [${statusLabel(child.status)}] ${child.name} ${DIM}(${date})${RESET}${worktreeTag}`,
+    );
   }
 
   if (children.length === 0) {
@@ -53,7 +56,8 @@ export function formatTreePlain(tree: TreeConfig): string {
     const child = tree.children[i];
     const isLast = i === tree.children.length - 1;
     const connector = isLast ? '\u2514\u2500\u2500' : '\u251C\u2500\u2500';
-    lines.push(`${connector} [${child.status}] ${child.name}`);
+    const worktreeTag = child.worktree ? ` [worktree: ${child.worktree.branch}]` : '';
+    lines.push(`${connector} [${child.status}] ${child.name}${worktreeTag}`);
   }
 
   return lines.join('\n');
