@@ -266,6 +266,34 @@ Troca a tree ativa.
 cctree use "Integração de Pagamentos"
 ```
 
+### `cctree abandon <nome> [--delete] [--tree <t>]`
+
+Aposenta uma sessão filha que você não quer mais. Dois modos:
+
+```bash
+cctree abandon "Abordagem Antiga"              # marca como abandonada (suave)
+cctree abandon "Abordagem Antiga" --delete     # apaga de verdade (agressivo)
+cctree abandon abordagem-antiga --tree auth    # especifica a tree alvo
+```
+
+- **Soft (default)**: muda o status do filho para `abandoned`. Continua aparecendo no `cctree list` (histórico preservado) mas fica de fora do contexto acumulado injetado nas próximas sessões. Use quando quer guardar o registro de "tentamos isso e desistimos".
+- **Hard (`--delete`)**: remove o filho do `tree.json`, apaga o summary commitado, e — se o filho foi criado com `--worktree` — também roda `git worktree remove` no worktree e deleta a branch auto-nomeada (`cctree/<tree>/<filho>`). Nomes de branch customizados passados via `--worktree <branch>` ficam preservados pra você não perder trabalho por acidente. O diretório do worktree é removido à força como fallback se o git recusar.
+- Limpa `~/.cctree/active-session.json` se estava apontando pro filho deletado.
+
+### `cctree rename <novo-nome> [--slug <novo-slug>] [--tree <t>]`
+
+Renomeia uma tree. Por padrão, só o nome de exibição; com `--slug` também renomeia o identificador em disco.
+
+```bash
+cctree rename "Auth Service v3"                    # só o nome
+cctree rename "Auth v3" --slug auth-v3             # também move o diretório + branches
+cctree rename "Auth v3" --tree auth-service-v2     # especifica uma tree não ativa
+```
+
+- **Só o nome**: atualiza o `name` no `tree.json` e regera o `context.md`. Conversas existentes no Claude mantêm o nome de sessão original, então `cctree resume` continua funcionando para os filhos já criados.
+- **Com `--slug`**: move `~/.cctree/trees/<antigo>/` para `~/.cctree/trees/<novo>/`, atualiza o ponteiro de tree ativa e o `active-session.json` se for o caso, e para cada filho com branch de worktree auto-nomeada (`cctree/<slug-antigo>/<filho>`): renomeia a branch git para `cctree/<slug-novo>/<filho>` e conserta o registro interno do git sobre a localização do worktree. Branches com nome customizado ficam preservadas.
+- Falha rápido se o slug alvo já está ocupado por outra tree.
+
 ### `cctree statusline [--format <template>]`
 
 Imprime um resumo de uma linha da sessão cctree ativa. Pensado para o [status line customizado](https://code.claude.com/docs/en/statusline) do Claude Code, para tmux ou qualquer outro display de status montado via shell. O comando não imprime nada (e sai com código 0) quando não há sessão cctree ativa, então compõe tranquilamente com outros segmentos.

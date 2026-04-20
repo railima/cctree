@@ -67,3 +67,19 @@ export async function createWorktree(opts: CreateWorktreeOptions): Promise<void>
 export async function removeWorktree(repoCwd: string, path: string): Promise<void> {
   await git(repoCwd, ['worktree', 'remove', path]);
 }
+
+export async function deleteBranch(repoCwd: string, branch: string): Promise<void> {
+  await git(repoCwd, ['branch', '-D', branch]);
+}
+
+export async function renameBranch(
+  repoCwd: string,
+  oldName: string,
+  newName: string,
+): Promise<void> {
+  await git(repoCwd, ['branch', '-m', oldName, newName]);
+}
+
+export async function repairWorktree(repoCwd: string, path: string): Promise<void> {
+  await git(repoCwd, ['worktree', 'repair', path]);
+}

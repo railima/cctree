@@ -24,6 +24,9 @@ vi.mock('../../src/lib/config.js', () => ({
   childSummaryPath: (treeSlug: string, childSlug: string) =>
     join(TEST_DIR, 'trees', treeSlug, 'children', `${childSlug}.md`),
   injectContextPath: (slug: string) => join(TEST_DIR, 'trees', slug, '.inject-context.md'),
+  worktreesDir: (slug: string) => join(TEST_DIR, 'trees', slug, 'worktrees'),
+  worktreePath: (treeSlug: string, childSlug: string) =>
+    join(TEST_DIR, 'trees', treeSlug, 'worktrees', childSlug),
   CONTEXT_HOOK_MAX_CHARS: 9500,
 }));
 
@@ -42,8 +45,14 @@ import {
   readActiveSession,
   addContextFiles,
   resolveTree,
+  abandonChild,
+  renameTree,
 } from '../../src/lib/storage.js';
 import type { ChildSession } from '../../src/types/index.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { stat } from 'node:fs/promises';
+const run = promisify(execFile);
 
 beforeEach(async () => {
   await mkdir(TEST_DIR, { recursive: true });
@@ -369,5 +378,270 @@ describe('activeSession', () => {
   it('returns null when no active session', async () => {
     const session = await readActiveSession();
     expect(session).toBeNull();
+  });
+});
+
+async function makeRepo(dir: string): Promise<void> {
+  await mkdir(dir, { recursive: true });
+  await run('git', ['init', '-q', '-b', 'main'], { cwd: dir });
+  await run('git', ['config', 'user.email', 'test@example.com'], { cwd: dir });
+  await run('git', ['config', 'user.name', 'Test'], { cwd: dir });
+  await run('git', ['config', 'commit.gpgsign', 'false'], { cwd: dir });
+  await writeFile(join(dir, 'README.md'), '# test\n');
+  await run('git', ['add', '.'], { cwd: dir });
+  await run('git', ['commit', '-q', '-m', 'init'], { cwd: dir });
+}
+
+describe('abandonChild', () => {
+  it('marks a child as abandoned by default', async () => {
+    await createTree('Tree', TEST_DIR, []);
+    await addChild('tree', {
+      name: 'Research',
+      slug: 'research',
+      status: 'active',
+      claude_session_name: 'Tree > Research',
+      created_at: new Date().toISOString(),
+    });
+
+    const result = await abandonChild('tree', 'research');
+    expect(result.mode).toBe('marked');
+
+    const loaded = await loadTree('tree');
+    expect(loaded.children[0].status).toBe('abandoned');
+  });
+
+  it('excludes abandoned children from rebuilt context', async () => {
+    await createTree('Tree', TEST_DIR, []);
+    const now = new Date().toISOString();
+    await addChild('tree', {
+      name: 'Committed',
+      slug: 'committed',
+      status: 'committed',
+      claude_session_name: 'Tree > Committed',
+      created_at: now,
+      committed_at: now,
+    });
+    await saveChildSummary('tree', 'committed', '## Decisions\n- something important');
+
+    await abandonChild('tree', 'committed');
+
+    const ctx = await readFile(join(TEST_DIR, 'trees', 'tree', 'context.md'), 'utf-8');
+    expect(ctx).not.toContain('something important');
+  });
+
+  it('deletes a child entirely with --delete', async () => {
+    await createTree('Tree', TEST_DIR, []);
+    await addChild('tree', {
+      name: 'Research',
+      slug: 'research',
+      status: 'active',
+      claude_session_name: 'Tree > Research',
+      created_at: new Date().toISOString(),
+    });
+    await saveChildSummary('tree', 'research', '# summary');
+
+    const result = await abandonChild('tree', 'research', { delete: true });
+    expect(result.mode).toBe('deleted');
+
+    const loaded = await loadTree('tree');
+    expect(loaded.children).toHaveLength(0);
+
+    await expect(
+      stat(join(TEST_DIR, 'trees', 'tree', 'children', 'research.md')),
+    ).rejects.toThrow();
+  });
+
+  it('clears active-session.json when deleting the current child', async () => {
+    await createTree('Tree', TEST_DIR, []);
+    await addChild('tree', {
+      name: 'Active',
+      slug: 'active-child',
+      status: 'active',
+      claude_session_name: 'Tree > Active',
+      created_at: new Date().toISOString(),
+    });
+    await writeActiveSession({ tree: 'tree', child: 'active-child' });
+
+    await abandonChild('tree', 'active-child', { delete: true });
+
+    expect(await readActiveSession()).toBeNull();
+  });
+
+  it('leaves active-session.json alone when abandoning a different child', async () => {
+    await createTree('Tree', TEST_DIR, []);
+    await addChild('tree', {
+      name: 'A',
+      slug: 'a',
+      status: 'active',
+      claude_session_name: 'Tree > A',
+      created_at: new Date().toISOString(),
+    });
+    await addChild('tree', {
+      name: 'B',
+      slug: 'b',
+      status: 'active',
+      claude_session_name: 'Tree > B',
+      created_at: new Date().toISOString(),
+    });
+    await writeActiveSession({ tree: 'tree', child: 'b' });
+
+    await abandonChild('tree', 'a', { delete: true });
+
+    const session = await readActiveSession();
+    expect(session).toEqual({ tree: 'tree', child: 'b' });
+  });
+
+  it('throws when the child does not exist', async () => {
+    await createTree('Tree', TEST_DIR, []);
+    await expect(abandonChild('tree', 'nope')).rejects.toThrow('not found');
+  });
+
+  it('removes the worktree and auto-named branch on --delete', async () => {
+    const repoDir = join(TEST_DIR, 'repo');
+    await makeRepo(repoDir);
+
+    await createTree('Tree', repoDir, []);
+
+    const wtPath = join(TEST_DIR, 'trees', 'tree', 'worktrees', 'api');
+    await run('git', ['worktree', 'add', '-b', 'cctree/tree/api', wtPath], {
+      cwd: repoDir,
+    });
+
+    await addChild('tree', {
+      name: 'API',
+      slug: 'api',
+      status: 'active',
+      claude_session_name: 'Tree > API',
+      created_at: new Date().toISOString(),
+      worktree: {
+        path: wtPath,
+        branch: 'cctree/tree/api',
+        base_ref: 'deadbeef',
+      },
+    });
+
+    const result = await abandonChild('tree', 'api', { delete: true });
+    expect(result.removedWorktree).toBe(wtPath);
+    expect(result.removedBranch).toBe('cctree/tree/api');
+
+    const { stdout } = await run('git', ['branch', '--list', 'cctree/tree/api'], {
+      cwd: repoDir,
+    });
+    expect(stdout.trim()).toBe('');
+    await expect(stat(wtPath)).rejects.toThrow();
+  });
+});
+
+describe('renameTree', () => {
+  it('updates the display name only by default', async () => {
+    await createTree('Old Name', TEST_DIR, []);
+
+    const result = await renameTree('old-name', { newName: 'New Name' });
+    expect(result.oldName).toBe('Old Name');
+    expect(result.newName).toBe('New Name');
+    expect(result.oldSlug).toBe('old-name');
+    expect(result.newSlug).toBe('old-name');
+
+    const loaded = await loadTree('old-name');
+    expect(loaded.name).toBe('New Name');
+  });
+
+  it('renames the slug and moves the on-disk directory', async () => {
+    await createTree('Old', TEST_DIR, []);
+
+    await renameTree('old', { newName: 'New', newSlug: 'new' });
+
+    await expect(stat(join(TEST_DIR, 'trees', 'old'))).rejects.toThrow();
+    const loaded = await loadTree('new');
+    expect(loaded.slug).toBe('new');
+    expect(loaded.name).toBe('New');
+  });
+
+  it('updates active-tree pointer when renaming the active tree', async () => {
+    await createTree('Foo', TEST_DIR, []);
+    await setActiveTree('foo');
+
+    await renameTree('foo', { newName: 'Bar', newSlug: 'bar' });
+
+    const active = await getActiveTree();
+    expect(active?.slug).toBe('bar');
+  });
+
+  it('updates active-session.json when renaming the current tree', async () => {
+    await createTree('Foo', TEST_DIR, []);
+    await addChild('foo', {
+      name: 'Session',
+      slug: 'session',
+      status: 'active',
+      claude_session_name: 'Foo > Session',
+      created_at: new Date().toISOString(),
+    });
+    await writeActiveSession({ tree: 'foo', child: 'session' });
+
+    await renameTree('foo', { newName: 'Bar', newSlug: 'bar' });
+
+    const session = await readActiveSession();
+    expect(session).toEqual({ tree: 'bar', child: 'session' });
+  });
+
+  it('throws when the new slug is already taken', async () => {
+    await createTree('Alpha', TEST_DIR, []);
+    await createTree('Beta', TEST_DIR, []);
+
+    await expect(
+      renameTree('alpha', { newName: 'Alpha Renamed', newSlug: 'beta' }),
+    ).rejects.toThrow('already taken');
+  });
+
+  it('rejects invalid new slugs', async () => {
+    await createTree('Foo', TEST_DIR, []);
+    await expect(
+      renameTree('foo', { newName: 'Foo', newSlug: '...' }),
+    ).rejects.toThrow('alphanumeric');
+  });
+
+  it('renames auto-named git branches and repairs worktrees on slug rename', async () => {
+    const repoDir = join(TEST_DIR, 'repo');
+    await makeRepo(repoDir);
+
+    await createTree('Tree', repoDir, []);
+
+    const wtPath = join(TEST_DIR, 'trees', 'tree', 'worktrees', 'api');
+    await run('git', ['worktree', 'add', '-b', 'cctree/tree/api', wtPath], {
+      cwd: repoDir,
+    });
+
+    await addChild('tree', {
+      name: 'API',
+      slug: 'api',
+      status: 'active',
+      claude_session_name: 'Tree > API',
+      created_at: new Date().toISOString(),
+      worktree: {
+        path: wtPath,
+        branch: 'cctree/tree/api',
+        base_ref: 'deadbeef',
+      },
+    });
+
+    const result = await renameTree('tree', { newName: 'Renamed', newSlug: 'renamed' });
+
+    expect(result.renamedBranches).toEqual([
+      { from: 'cctree/tree/api', to: 'cctree/renamed/api' },
+    ]);
+    expect(result.movedWorktrees).toHaveLength(1);
+
+    const loaded = await loadTree('renamed');
+    expect(loaded.children[0].worktree?.branch).toBe('cctree/renamed/api');
+    expect(loaded.children[0].worktree?.path).toBe(
+      join(TEST_DIR, 'trees', 'renamed', 'worktrees', 'api'),
+    );
+
+    const { stdout } = await run(
+      'git',
+      ['branch', '--list', 'cctree/renamed/api'],
+      { cwd: repoDir },
+    );
+    expect(stdout.trim()).toContain('cctree/renamed/api');
   });
 });

@@ -100,6 +100,32 @@ program
   });
 
 program
+  .command('abandon')
+  .description('Mark a child session as abandoned (or fully delete with --delete)')
+  .argument('<name>', 'child session name or slug')
+  .option('--delete', 'delete the session entirely (removes summary, worktree, and auto-named branch)')
+  .option('-t, --tree <name>', 'target tree (name or slug); defaults to active tree')
+  .action(
+    async (name: string, options: { delete?: boolean; tree?: string }) => {
+      const { abandonCommand } = await import('./commands/abandon.js');
+      await abandonCommand(name, options);
+    },
+  );
+
+program
+  .command('rename')
+  .description('Rename a tree (display name; optionally the slug)')
+  .argument('<new-name>', 'new display name for the tree')
+  .option('-s, --slug <slug>', 'also rename the tree slug (moves the on-disk directory and worktrees)')
+  .option('-t, --tree <name>', 'target tree (name or slug); defaults to active tree')
+  .action(
+    async (newName: string, options: { slug?: string; tree?: string }) => {
+      const { renameCommand } = await import('./commands/rename.js');
+      await renameCommand(newName, options);
+    },
+  );
+
+program
   .command('statusline')
   .description('Print a compact status line (for Claude Code statusline, tmux, etc.)')
   .option(
