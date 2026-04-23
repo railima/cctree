@@ -43,6 +43,9 @@
   ],
   "author": "railima",
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/railima/cctree.git"
