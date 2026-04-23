@@ -319,6 +319,27 @@ cctree rename "Auth v3" --tree auth-service-v2     # target a non-active tree
 - **With `--slug`**: moves `~/.cctree/trees/<old>/` to `~/.cctree/trees/<new>/`, updates the active-tree pointer and `active-session.json` if needed, and for every child with an auto-named worktree branch (`cctree/<old-slug>/<child>`): renames the git branch to `cctree/<new-slug>/<child>` and repairs git's internal worktree bookkeeping for the new path. Custom-named branches are preserved.
 - Fails fast if the target slug is already taken by another tree.
 
+### `cctree export mermaid [--tree <name>] [--output <file>]`
+
+Render the session trees as a [Mermaid](https://mermaid.js.org/) graph diagram. GitHub, Obsidian, Notion, and VSCode all render Mermaid natively, so the output pastes directly into PR descriptions, docs, or release notes.
+
+```bash
+cctree export mermaid                          # all trees → stdout
+cctree export mermaid --tree auth-service-v2   # one tree only
+cctree export mermaid --output docs/roadmap.md # write to a file
+cctree export mermaid > docs/roadmap.md        # or just pipe
+```
+
+Children are colored by status: committed (green), active (yellow), abandoned (gray dashed). The tree node shows session counts so you get project-level overview at a glance:
+
+```mermaid
+graph TD
+  auth_service_v2["<b>Auth Service v2</b><br/>(auth-service-v2)<br/>2 committed · 1 active"]
+  auth_service_v2 --> auth_service_v2__architecture_research["Architecture Research<br/>✓ Apr 15"]
+  auth_service_v2 --> auth_service_v2__database_schema["Database Schema<br/>✓ Apr 17"]
+  auth_service_v2 --> auth_service_v2__api_implementation["API Implementation<br/>⚡ active"]
+```
+
 ### `cctree statusline [--format <template>]`
 
 Print a compact single-line summary of the current cctree session. Intended for Claude Code's custom [status line](https://code.claude.com/docs/en/statusline), tmux, or any other shell-composed status display. The command prints nothing (and exits 0) when there is no active cctree session, so it composes cleanly with other statusline segments.

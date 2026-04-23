@@ -112,6 +112,20 @@ program
     },
   );
 
+const exportCmd = program
+  .command('export')
+  .description('Export the session trees to a portable format (diagram, vault, ...)');
+
+exportCmd
+  .command('mermaid')
+  .description('Render the session trees as a Mermaid graph diagram')
+  .option('-t, --tree <name>', 'render only one tree (name or slug); defaults to all trees')
+  .option('-o, --output <file>', 'write the diagram to a file instead of stdout')
+  .action(async (options: { tree?: string; output?: string }) => {
+    const { exportMermaidCommand } = await import('./commands/export.js');
+    await exportMermaidCommand(options);
+  });
+
 program
   .command('rename')
   .description('Rename a tree (display name; optionally the slug)')
