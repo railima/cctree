@@ -126,6 +126,16 @@ exportCmd
     await exportMermaidCommand(options);
   });
 
+exportCmd
+  .command('obsidian')
+  .description('Export the session trees as a wiki-linked vault for Obsidian graph view')
+  .argument('<vault-path>', 'path to an existing Obsidian vault directory')
+  .option('-t, --tree <name>', 'export only one tree (name or slug); defaults to all trees')
+  .action(async (vaultPath: string, options: { tree?: string }) => {
+    const { exportObsidianCommand } = await import('./commands/export.js');
+    await exportObsidianCommand(vaultPath, options);
+  });
+
 program
   .command('rename')
   .description('Rename a tree (display name; optionally the slug)')

@@ -315,6 +315,31 @@ graph TD
   auth_service_v2 --> auth_service_v2__api_implementation["API Implementation<br/>⚡ active"]
 ```
 
+### `cctree export obsidian <vault-path> [--tree <nome>]`
+
+Exporta as trees como um conjunto de arquivos markdown com wiki-links para o [Obsidian](https://obsidian.md/). Abre o vault no Obsidian e você tem o grafo navegável estilo "cérebro" com trees, filhos, e — quando os summaries mencionam arquivos de código — esses arquivos aparecem como nós no grafo.
+
+```bash
+cctree export obsidian ~/vaults/my-brain                          # todas as trees
+cctree export obsidian ~/vaults/my-brain --tree auth-service-v2   # só uma tree
+```
+
+O comando escreve em `<vault>/cctree/`:
+
+```
+<vault>/cctree/
+  index.md                            # MOC — links para todas as trees
+  <tree-slug>/
+    _index.md                         # overview da tree + links pros filhos
+    <child-slug>.md                   # um arquivo por filho committed
+```
+
+Cada filho committed recebe frontmatter YAML (tree, status, datas, tags, worktree-branch), o summary verbatim, wiki-links de volta pra tree e irmãos, e — se o summary menciona paths como `src/auth.ts` ou `db/migrate/001_users.rb` — uma seção `## Related files` que linka como wiki-links do Obsidian. Esses links de arquivo viram nós cinza no grafo, que ficam progressivamente "iluminados" conforme múltiplas releases tocam os mesmos arquivos, te dando uma visão natural das hot zones do projeto.
+
+Filhos `active` ou `abandoned` aparecem no `_index.md` da tree mas não geram arquivo próprio — só summaries committed são materializados.
+
+**Idempotente**: re-rodar **sobrescreve** `<vault>/cctree/` inteiro. Arquivos em qualquer outro lugar do vault (inclusive suas próprias notas) nunca são tocados. Com `--tree`, só a subpasta daquela tree é regenerada e o `index.md` é preservado.
+
 ### `cctree statusline [--format <template>]`
 
 Imprime um resumo de uma linha da sessão cctree ativa. Pensado para o [status line customizado](https://code.claude.com/docs/en/statusline) do Claude Code, para tmux ou qualquer outro display de status montado via shell. O comando não imprime nada (e sai com código 0) quando não há sessão cctree ativa, então compõe tranquilamente com outros segmentos.
