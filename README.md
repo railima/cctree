@@ -56,7 +56,7 @@ npm install -g @railima/cctree
 cctree mcp-install
 ```
 
-This registers `cctree` as an MCP server so Claude Code sessions have access to the `commit_to_parent`, `get_tree_status`, and `get_sibling_context` tools.
+This registers `cctree` as an MCP server so Claude Code sessions have access to the `commit_to_parent`, `get_tree_status`, `get_sibling_context`, `export_mermaid`, and `export_obsidian` tools.
 
 ### Create your first tree
 
@@ -440,6 +440,25 @@ Reads a specific sibling session's committed summary. Useful when you need detai
 ```
 You: what did we decide about the database in the schema session?
 Claude: [uses get_sibling_context with name "Database Schema"]
+```
+
+### `export_mermaid`
+
+Returns the whole session-tree state as a [Mermaid](https://mermaid.js.org/) `graph TD` block. Claude can call this when you ask to "visualize the tree", "summarize the sessions as a diagram", or anything similar — no need to remember the CLI shape. Optionally takes a `tree` argument to filter. Unlike the other tools, this one does **not** require being inside a cctree session, so Claude can render the diagram from any repo.
+
+```
+You: draw me a diagram of where we are across all releases
+Claude: [uses export_mermaid] → pastes the diagram into chat, which your
+        client renders natively
+```
+
+### `export_obsidian`
+
+Exports the session trees as wiki-linked markdown into an existing Obsidian vault. Mirrors `cctree export obsidian <vault>`: creates a `cctree/` subfolder with a MOC, one subfolder per tree, and one file per committed child (frontmatter + summary verbatim + wiki-links to siblings and to any file paths mentioned in the summary). Idempotent; never touches files outside `<vault>/cctree/`. Takes `vaultPath` (required) and an optional `tree` filter.
+
+```
+You: sync the auth-service-v2 tree to my Obsidian vault at ~/vaults/work
+Claude: [uses export_obsidian with vaultPath="~/vaults/work", tree="auth-service-v2"]
 ```
 
 ## Multiple Trees
