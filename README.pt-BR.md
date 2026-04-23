@@ -56,7 +56,7 @@ npm install -g @railima/cctree
 cctree mcp-install
 ```
 
-Isso registra o `cctree` como servidor MCP para que as sessões do Claude Code tenham acesso às tools `commit_to_parent`, `get_tree_status` e `get_sibling_context`.
+Isso registra o `cctree` como servidor MCP para que as sessões do Claude Code tenham acesso às tools `commit_to_parent`, `get_tree_status`, `get_sibling_context`, `export_mermaid` e `export_obsidian`.
 
 ### Criar a primeira tree
 
@@ -385,6 +385,10 @@ Essas tools ficam disponíveis para o Claude dentro de sessões lançadas via `c
 | `commit_to_parent` | Commita um resumo estruturado de volta para a tree pai |
 | `get_tree_status` | Mostra a estrutura da tree com status de cada filho |
 | `get_sibling_context` | Lê o resumo commitado de uma sessão irmã específica |
+| `export_mermaid` | Renderiza as trees como diagrama Mermaid (`graph TD`) |
+| `export_obsidian` | Exporta as trees como markdown wiki-linkado pra um vault do Obsidian |
+
+`export_mermaid` e `export_obsidian` não exigem sessão cctree ativa — o Claude pode chamá-las de qualquer repo. Ambas aceitam um argumento opcional `tree` pra filtrar por árvore. `export_obsidian` também recebe `vaultPath` (obrigatório, path de um vault existente).
 
 ### Formato do summary ao commitar
 
