@@ -294,6 +294,27 @@ cctree rename "Auth v3" --tree auth-service-v2     # especifica uma tree não at
 - **Com `--slug`**: move `~/.cctree/trees/<antigo>/` para `~/.cctree/trees/<novo>/`, atualiza o ponteiro de tree ativa e o `active-session.json` se for o caso, e para cada filho com branch de worktree auto-nomeada (`cctree/<slug-antigo>/<filho>`): renomeia a branch git para `cctree/<slug-novo>/<filho>` e conserta o registro interno do git sobre a localização do worktree. Branches com nome customizado ficam preservadas.
 - Falha rápido se o slug alvo já está ocupado por outra tree.
 
+### `cctree export mermaid [--tree <nome>] [--output <arquivo>]`
+
+Renderiza as trees como um diagrama [Mermaid](https://mermaid.js.org/). GitHub, Obsidian, Notion e VSCode renderizam Mermaid nativamente, então o output cola direto em descrição de PR, docs, release notes.
+
+```bash
+cctree export mermaid                          # todas as trees → stdout
+cctree export mermaid --tree auth-service-v2   # só uma tree
+cctree export mermaid --output docs/roadmap.md # escreve em arquivo
+cctree export mermaid > docs/roadmap.md        # ou via pipe
+```
+
+Filhos são coloridos por status: committed (verde), active (amarelo), abandoned (cinza tracejado). O nó da tree mostra contagem de sessões pra overview rápido do projeto:
+
+```mermaid
+graph TD
+  auth_service_v2["<b>Auth Service v2</b><br/>(auth-service-v2)<br/>2 committed · 1 active"]
+  auth_service_v2 --> auth_service_v2__architecture_research["Architecture Research<br/>✓ Apr 15"]
+  auth_service_v2 --> auth_service_v2__database_schema["Database Schema<br/>✓ Apr 17"]
+  auth_service_v2 --> auth_service_v2__api_implementation["API Implementation<br/>⚡ active"]
+```
+
 ### `cctree statusline [--format <template>]`
 
 Imprime um resumo de uma linha da sessão cctree ativa. Pensado para o [status line customizado](https://code.claude.com/docs/en/statusline) do Claude Code, para tmux ou qualquer outro display de status montado via shell. O comando não imprime nada (e sai com código 0) quando não há sessão cctree ativa, então compõe tranquilamente com outros segmentos.
