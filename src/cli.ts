@@ -136,6 +136,23 @@ exportCmd
     await exportObsidianCommand(vaultPath, options);
   });
 
+exportCmd
+  .command('report')
+  .description('Generate a shareable markdown progress report for a tree (decisions, open questions, hot files, timeline, structure)')
+  .argument('<tree>', 'tree name or slug to report on')
+  .option('-c, --children <slugs>', 'comma-separated list of child slugs to include; defaults to all children in the tree')
+  .option('-a, --author <name>', 'override the auto-detected author name (default: git config user.name)')
+  .option('-o, --output <file>', 'write the report to a file instead of stdout')
+  .action(
+    async (
+      treeName: string,
+      options: { children?: string; author?: string; output?: string },
+    ) => {
+      const { exportReportCommand } = await import('./commands/export.js');
+      await exportReportCommand(treeName, options);
+    },
+  );
+
 program
   .command('rename')
   .description('Rename a tree (display name; optionally the slug)')
