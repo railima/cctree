@@ -56,7 +56,7 @@ npm install -g @railima/cctree
 cctree mcp-install
 ```
 
-Isso registra o `cctree` como servidor MCP para que as sessões do Claude Code tenham acesso às tools `commit_to_parent`, `get_tree_status`, `get_sibling_context`, `export_mermaid` e `export_obsidian`.
+Isso registra o `cctree` como servidor MCP para que as sessões do Claude Code tenham acesso às tools `commit_to_parent`, `get_tree_status`, `get_sibling_context`, `export_mermaid`, `export_obsidian` e `export_report`.
 
 ### Criar a primeira tree
 
@@ -294,6 +294,18 @@ cctree rename "Auth v3" --tree auth-service-v2     # especifica uma tree não at
 - **Com `--slug`**: move `~/.cctree/trees/<antigo>/` para `~/.cctree/trees/<novo>/`, atualiza o ponteiro de tree ativa e o `active-session.json` se for o caso, e para cada filho com branch de worktree auto-nomeada (`cctree/<slug-antigo>/<filho>`): renomeia a branch git para `cctree/<slug-novo>/<filho>` e conserta o registro interno do git sobre a localização do worktree. Branches com nome customizado ficam preservadas.
 - Falha rápido se o slug alvo já está ocupado por outra tree.
 
+### Exports
+
+O `cctree` tem três comandos de export que transformam o estado acumulado das trees em artefatos que você compartilha, cola ou navega fora do terminal. Cada um é intencionalmente específico pro seu formato, em vez de um exporter genérico:
+
+| Comando | Output | Público |
+| --- | --- | --- |
+| `cctree export mermaid` | Bloco Mermaid `graph TD` | Paste rápido em PR, docs, release notes |
+| `cctree export obsidian <vault>` | Markdown wiki-linkado pra vault Obsidian | Navegação "cérebro" estilo graph view |
+| `cctree export report <tree>` | Progress report em markdown pra compartilhar | Visibilidade sprint-level pro tech lead |
+
+Os três também são MCP tools (`export_mermaid`, `export_obsidian`, `export_report`), então o Claude pode chamar direto quando você pede — veja a [seção Tools MCP](#tools-mcp-dentro-do-claude-code).
+
 ### `cctree export mermaid [--tree <nome>] [--output <arquivo>]`
 
 Renderiza as trees como um diagrama [Mermaid](https://mermaid.js.org/). GitHub, Obsidian, Notion e VSCode renderizam Mermaid nativamente, então o output cola direto em descrição de PR, docs, release notes.
@@ -339,6 +351,34 @@ Cada filho committed recebe frontmatter YAML (tree, status, datas, tags, worktre
 Filhos `active` ou `abandoned` aparecem no `_index.md` da tree mas não geram arquivo próprio — só summaries committed são materializados.
 
 **Idempotente**: re-rodar **sobrescreve** `<vault>/cctree/` inteiro. Arquivos em qualquer outro lugar do vault (inclusive suas próprias notas) nunca são tocados. Com `--tree`, só a subpasta daquela tree é regenerada e o `index.md` é preservado.
+
+### `cctree export report <tree> [--children <slugs>] [--author <nome>] [--output <arquivo>]`
+
+Gera um **progress report compartilhável** pra uma tree. Pensado pra reporte de fim de sprint: o dev roda, revisa o markdown, e compartilha com o tech leader pra ele ver o que foi trabalhado, quais gaps continuam abertos e pra onde o produto tá evoluindo — sem precisar ler cada sessão uma por uma.
+
+```bash
+cctree export report auth-service-v2                                   # todas as sessions
+cctree export report auth-service-v2 --children research,impl          # cherry-pick
+cctree export report auth-service-v2 --output sprint-42.md             # em arquivo
+cctree export report auth-service-v2 --author "Rai Lima"               # override
+```
+
+O report agrega o conteúdo das sessions por tema, pra que o leitor absorva a **tree como um todo**, não uma sequência de transcripts:
+
+- **Decisions** — todos os bullets de `## Decisions` de todos os summaries committed, agrupados por qual session tomou a decisão. É o mapa de como o produto tá evoluindo.
+- **Open questions** — todos os `## Open Questions` ainda em aberto. Pro tech leader, é a seção mais valiosa: "o que meu time ainda tá descobrindo?"
+- **Artifacts delivered** — todos os `## Artifacts Created`, deduplicados.
+- **Hot files** — ranking de arquivos mencionados em várias sessions. O topo é onde a superfície do produto tá concentrando mudança — sinal natural de risco de merge e pressão arquitetural.
+- **Timeline** — gantt Mermaid (só data, sem hora) mostrando quando cada session começou e terminou.
+- **Structure** — diagrama Mermaid da tree com o escopo do report.
+- **Session detail** — um `<details>` colapsável por session com o summary verbatim, pra drill-down.
+
+O autor do report é detectado do `git config user.name` no cwd, com fallback pro username do OS. Override com `--author "Nome"` se precisar.
+
+**Princípios de design que valem destacar**:
+- **Dev controla**. É um export explícito que o dev roda, revisa e compartilha. Não tem mecanismo remoto de "puxar" estado de ninguém. O ritual ("dev compartilha no fim da sprint") importa mais que o artefato.
+- **Framing neutro pra exploração**. Filhos abandoned aparecem como *Explored (parked)* com nota explicando que são decisões conscientes de **não** seguir um caminho — isso é sinal valioso de direção do produto, não falha.
+- **Uma tree por report**. Reports são por tree pra cada um ficar focado. Múltiplas trees = rodar múltiplas vezes.
 
 ### `cctree statusline [--format <template>]`
 
@@ -387,8 +427,9 @@ Essas tools ficam disponíveis para o Claude dentro de sessões lançadas via `c
 | `get_sibling_context` | Lê o resumo commitado de uma sessão irmã específica |
 | `export_mermaid` | Renderiza as trees como diagrama Mermaid (`graph TD`) |
 | `export_obsidian` | Exporta as trees como markdown wiki-linkado pra um vault do Obsidian |
+| `export_report` | Gera o progress report em markdown de uma tree pra compartilhar |
 
-`export_mermaid` e `export_obsidian` não exigem sessão cctree ativa — o Claude pode chamá-las de qualquer repo. Ambas aceitam um argumento opcional `tree` pra filtrar por árvore. `export_obsidian` também recebe `vaultPath` (obrigatório, path de um vault existente).
+`export_mermaid`, `export_obsidian` e `export_report` não exigem sessão cctree ativa — o Claude pode chamá-las de qualquer repo. Todas aceitam `tree` (no caso do `export_report`, obrigatório; nos outros, opcional como filtro). `export_obsidian` também recebe `vaultPath` (obrigatório). `export_report` aceita opcionalmente `children` (lista de slugs de filhos pra cherry-pick) e `author` (override do nome detectado automaticamente).
 
 ### Formato do summary ao commitar
 

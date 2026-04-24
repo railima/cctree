@@ -56,7 +56,7 @@ npm install -g @railima/cctree
 cctree mcp-install
 ```
 
-This registers `cctree` as an MCP server so Claude Code sessions have access to the `commit_to_parent`, `get_tree_status`, `get_sibling_context`, `export_mermaid`, and `export_obsidian` tools.
+This registers `cctree` as an MCP server so Claude Code sessions have access to the `commit_to_parent`, `get_tree_status`, `get_sibling_context`, `export_mermaid`, `export_obsidian`, and `export_report` tools.
 
 ### Create your first tree
 
@@ -319,6 +319,18 @@ cctree rename "Auth v3" --tree auth-service-v2     # target a non-active tree
 - **With `--slug`**: moves `~/.cctree/trees/<old>/` to `~/.cctree/trees/<new>/`, updates the active-tree pointer and `active-session.json` if needed, and for every child with an auto-named worktree branch (`cctree/<old-slug>/<child>`): renames the git branch to `cctree/<new-slug>/<child>` and repairs git's internal worktree bookkeeping for the new path. Custom-named branches are preserved.
 - Fails fast if the target slug is already taken by another tree.
 
+### Exports
+
+`cctree` ships three export commands that turn the accumulated tree state into artifacts you can share, paste, or navigate outside the terminal. Each one is intentionally output-format-specific rather than a single "one size fits all" exporter:
+
+| Command | Output | Audience |
+| --- | --- | --- |
+| `cctree export mermaid` | A Mermaid `graph TD` block | Quick paste-in for PRs, docs, release notes |
+| `cctree export obsidian <vault>` | Wiki-linked markdown in an Obsidian vault | Navigable "brain"-style graph view |
+| `cctree export report <tree>` | Shareable markdown progress report | Sprint-level visibility for a tech lead |
+
+All three are also exposed as MCP tools (`export_mermaid`, `export_obsidian`, `export_report`) so Claude can invoke them directly when you ask — see the [MCP Tools section](#mcp-tools-inside-claude-code) below.
+
 ### `cctree export mermaid [--tree <name>] [--output <file>]`
 
 Render the session trees as a [Mermaid](https://mermaid.js.org/) graph diagram. GitHub, Obsidian, Notion, and VSCode all render Mermaid natively, so the output pastes directly into PR descriptions, docs, or release notes.
@@ -364,6 +376,34 @@ Each committed child file gets YAML frontmatter (tree, status, dates, tags, work
 Children that are `active` or `abandoned` are listed in the tree's `_index.md` but do not get their own file — only committed summaries are materialized.
 
 **Idempotent**: re-running the command **overwrites** `<vault>/cctree/` entirely. Files anywhere else in the vault (including your own notes) are never touched. With `--tree`, only that tree's subfolder is regenerated and `index.md` is left alone.
+
+### `cctree export report <tree> [--children <slugs>] [--author <name>] [--output <file>]`
+
+Generate a **shareable progress report** for one tree. Designed for end-of-sprint reporting: the dev runs this, reviews the markdown, and shares it with their tech lead so they can see what was worked on, which gaps remain open, and where the product is evolving — without reading every session transcript.
+
+```bash
+cctree export report auth-service-v2                                   # all sessions
+cctree export report auth-service-v2 --children research,impl          # cherry-pick
+cctree export report auth-service-v2 --output sprint-42.md             # to a file
+cctree export report auth-service-v2 --author "Rai Lima"               # override
+```
+
+The report aggregates every session's content under cross-cutting headings so the reader absorbs the **tree as a whole**, not a session-by-session transcript:
+
+- **Decisions** — every `## Decisions` bullet from every committed summary, grouped by which session made it. This is the map of how the product is evolving.
+- **Open questions** — every `## Open Questions` bullet still in the tree. For a tech lead, this is the most valuable section: "what is my team still figuring out?"
+- **Artifacts delivered** — every `## Artifacts Created` entry, deduplicated.
+- **Hot files** — a ranked table of file paths mentioned across multiple sessions. The top rows are where the product surface is concentrating — a natural signal for merge risk and architectural pressure.
+- **Timeline** — a Mermaid gantt chart (date-only) showing when each session started and ended.
+- **Structure** — a Mermaid graph of the scoped tree (same renderer as `cctree export mermaid`).
+- **Session detail** — one collapsible `<details>` block per session with the full summary verbatim, for drill-down.
+
+The report's author is detected from `git config user.name` in the current working directory, falling back to the OS username. Override with `--author "Name"` when you need to.
+
+**Design principles worth calling out**:
+- **Dev-controlled**. This is an explicit export the dev runs, reviews, and shares. There is no remote-query mechanism. The ritual ("dev shares at end of sprint") matters more than the artifact.
+- **Neutral framing for exploration**. Abandoned children are labeled *Explored (parked)* with a note explaining they represent conscious decisions not to pursue a direction — that is valuable product-direction signal, not failure.
+- **One tree per report**. Reports are single-tree so each one stays focused and readable. Running this across multiple trees means running it multiple times.
 
 ### `cctree statusline [--format <template>]`
 
@@ -459,6 +499,20 @@ Exports the session trees as wiki-linked markdown into an existing Obsidian vaul
 ```
 You: sync the auth-service-v2 tree to my Obsidian vault at ~/vaults/work
 Claude: [uses export_obsidian with vaultPath="~/vaults/work", tree="auth-service-v2"]
+```
+
+### `export_report`
+
+Generates the shareable progress report described above — same output as `cctree export report <tree>`, but Claude returns the markdown directly in chat so you can review and paste it. Takes `tree` (required) and optional `children` (array of slugs) and `author` overrides. No active session required; Claude can generate reports for any tree from any repo.
+
+```
+You: gera o report da árvore auth-service-v2 pra eu mandar pro tech lead
+Claude: [uses export_report with tree="auth-service-v2"] → returns the full
+        markdown; you review it, tweak if needed, and share
+
+You: só as sessões de research e implementação
+Claude: [uses export_report with tree="auth-service-v2",
+        children=["research","impl"]]
 ```
 
 ## Multiple Trees
