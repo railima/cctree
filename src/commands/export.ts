@@ -6,6 +6,10 @@ import {
   resolveTree,
 } from '../lib/storage.js';
 import { renderMermaid } from '../lib/mermaid.js';
+import {
+  renderArchitectureMermaid,
+  ArchitectureMermaidError,
+} from '../lib/mermaid-architecture.js';
 import { exportToObsidian } from '../lib/obsidian.js';
 import { renderReport } from '../lib/report.js';
 import { resolveAuthor } from '../lib/author.js';
@@ -14,6 +18,7 @@ import type { ChildSession, TreeConfig } from '../types/index.js';
 export interface ExportMermaidCliOptions {
   tree?: string;
   output?: string;
+  architecture?: boolean;
 }
 
 export interface ExportObsidianCliOptions {
@@ -30,6 +35,46 @@ export async function exportMermaidCommand(
   options: ExportMermaidCliOptions,
 ): Promise<void> {
   try {
+    if (options.architecture) {
+      if (!options.tree) {
+        throw new Error(
+          '--architecture requires --tree <name> (architecture diagrams are scoped to one tree).',
+        );
+      }
+      const tree = await resolveTree(options.tree);
+      const summaries = new Map<string, string>();
+      for (const child of tree.children) {
+        if (child.status !== 'committed') continue;
+        try {
+          summaries.set(
+            child.slug,
+            await loadChildSummary(tree.slug, child.slug),
+          );
+        } catch {
+          // skip missing summaries
+        }
+      }
+
+      const result = await renderArchitectureMermaid(tree, summaries);
+
+      if (options.output) {
+        const absPath = resolve(process.cwd(), options.output);
+        await writeFile(absPath, result.diagram);
+        console.error(`Wrote architecture diagram to ${absPath}`);
+      } else {
+        process.stdout.write(result.diagram);
+      }
+
+      const cacheNote =
+        result.usage.cacheReadInputTokens > 0
+          ? ` (cache hit: ${result.usage.cacheReadInputTokens} cached input tokens)`
+          : '';
+      console.error(
+        `Generated via ${result.model}: ${result.usage.inputTokens} input + ${result.usage.outputTokens} output tokens${cacheNote}.`,
+      );
+      return;
+    }
+
     let trees: TreeConfig[];
     if (options.tree) {
       trees = [await resolveTree(options.tree)];
@@ -48,7 +93,14 @@ export async function exportMermaidCommand(
 
     process.stdout.write(diagram);
   } catch (err) {
-    console.error(`Error: ${(err as Error).message}`);
+    if (err instanceof ArchitectureMermaidError) {
+      console.error(`Error: ${err.message}`);
+      console.error(
+        'Tip: drop --architecture to fall back to the structural tree diagram.',
+      );
+    } else {
+      console.error(`Error: ${(err as Error).message}`);
+    }
     process.exit(1);
   }
 }
