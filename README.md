@@ -1,46 +1,57 @@
 # cctree
 
-**Hierarchical session management for [Claude Code](https://claude.ai/code) with bidirectional context flow.**
+**A session tree for [Claude Code](https://claude.ai/code): organize related conversations into searchable, durable trees with bidirectional context flow.**
 
 > [Leia em Português](README.pt-BR.md)
 
-## The Problem
+cctree is two tools in one:
 
-When working on a multi-week project with Claude Code, you end up creating dozens of sessions: one for architecture decisions, another for implementing a feature, another to debug a bug, another to write tests. Every time you start a new session, you lose all the context from previous ones and have to re-explain the project, paste docs, and repeat yourself.
+- **A knowledge organizer** for everything you do with Claude Code — group conversations into trees by sprint, release, or topic; tag them; search across them later. `cctree list --all`, `cctree find <query>`, `cctree export mermaid` give you a queryable record of what you worked on, when, and what you decided.
+- **A bidirectional context bus** between related sessions — the layered TL;DR + Decisions + Artifacts of every committed child is automatically injected into every new sibling. No re-explaining, no copy-pasting, no session-hopping to look up "what did we decide about X?".
 
-But losing context between sessions is only half the problem. The other half is **needing to go back**. You're deep in an implementation session and hit a bug that's related to an architecture decision you made three sessions ago. The only way to get useful help is to switch back to that architecture session, because that's where Claude has the full context of *why* things were designed that way. So you leave your implementation session, scroll through `/resume` trying to find the right one, ask your question there, then switch back and manually relay the answer. This constant session-hopping breaks your flow and wastes time.
+You can use either side without the other. Most users start using cctree for organization (because the search and structure are immediately useful) and graduate to the context flow as their trees grow.
 
-`--fork-session` helps with the first problem, but it's one-directional: the child gets the parent's history, but what the child learns never flows back. And it doesn't help with the second problem at all: you still can't query a sibling session's knowledge from where you are.
+## The Problems It Solves
 
-**cctree fixes both.** It creates a session tree where knowledge flows in both directions: parent to child (context injection) and child to parent (commit back). Each new session starts with the accumulated wisdom of every session before it. And when you need details from a specific sibling session, the `get_sibling_context` tool lets you read its committed summary without leaving your current session.
+**1. Conversations vanish into a flat history.** Claude Code's session list is a chronological scroll. If a teammate asks "did you ever look into the OAuth refresh bug?", you're skimming session names trying to remember which one. cctree gives you `cctree find "oauth"` and an organized tree per sprint/release/topic.
+
+**2. Every new session starts from zero.** You design a database schema in one session, then implement endpoints in another. The implementation session has none of the design context unless you re-explain it. `--fork-session` clones a session's history, but it's one-directional and doesn't help when the relevant decisions live in a *sibling* session you opened a week ago. cctree injects every committed sibling's TL;DR + Decisions + Artifacts automatically.
+
+**3. Cross-session knowledge queries are manual.** You're deep in implementation and hit a bug that ties back to an architecture decision three sessions ago. Without cctree, you switch sessions, ask there, switch back, and copy the answer. With cctree, the answer is already in your context — and if you need more detail, the `get_sibling_context` MCP tool reads the full committed notes of any sibling without leaving your current session.
+
+**4. Token bloat from accumulated context.** A naive "inject everything" approach grows linearly with every commit. cctree's commit summaries are layered: only TL;DR + Decisions + Artifacts get injected; verbose `## Details` stay on disk and are read on demand. The injected context stays compact even after dozens of committed sessions.
 
 ## How It Works
 
+A **tree** is a managed document on disk (not a Claude session — it doesn't burn its own context window). You create child sessions under it, work, and commit a structured summary back. The next sibling inherits everything committed so far.
+
 ```
                     ┌─────────────────────┐
-                    │   Auth Service v2    │  <- parent (context accumulator)
-                    │                     │
-                    │  context.md grows    │
-                    │  with each commit    │
+                    │   Auth Service v2   │  <- parent: context.md grows with each commit
+                    │                     │     (just a file in ~/.cctree, not a session)
+                    │  TL;DR + Decisions  │
+                    │  + Artifacts        │
                     └──────────┬──────────┘
-                               │
+                               │ injected as system prompt
             ┌──────────────────┼──────────────────┐
             │                  │                  │
-   ┌────────▼────────┐ ┌──────▼───────┐ ┌────────▼────────┐
+   ┌────────▼────────┐ ┌───────▼──────┐ ┌─────────▼───────┐
    │  Architecture   │ │   Database   │ │  API Endpoints  │
    │  Research       │ │   Schema     │ │  Implementation │
    │                 │ │              │ │                 │
    │ commit back ────┤ │ commit back ─┤ │ commit back ────┤
    └─────────────────┘ └──────────────┘ └─────────────────┘
+        │                    │                   │
+        └────────────────────┴───────────────────┘
+                  searchable via `cctree find`,
+                  visualizable via `cctree export mermaid`
 ```
 
-1. You create a **tree** (the parent) with initial context docs
-2. You create **branches** (child sessions) for specific tasks
-3. Each child session opens Claude Code with all accumulated context injected
-4. When a child session finishes, Claude **commits** a structured summary back to the parent
-5. The next child session automatically inherits everything
-
-The parent is not a Claude session. It's a managed document on disk that grows as children commit back. No context window is wasted on a "hub" session.
+1. **`cctree init <name>`** — create a tree, optionally with reference docs as initial context
+2. **`cctree branch <name> [--tags ...]`** — create a child session; Claude Code opens with the accumulated layered context already injected
+3. **`commit_to_parent`** — when the work is done, Claude (or you) commits a summary with `## TL;DR`, `## Decisions`, optional `## Artifacts` / `## Open Questions` / `## Next Steps` / `## Details`
+4. **Next sibling automatically inherits** the TL;DR + Decisions + Artifacts of every committed session before it
+5. **Search and review later** — `cctree list --all`, `cctree list --tag <tag>`, `cctree find <query>`, `cctree export mermaid --architecture`
 
 ## Quick Start
 
@@ -92,93 +103,130 @@ This session already knows every architecture decision from session 1. When done
 
 ## Use Cases
 
-cctree gets used three ways in practice. Pick whichever maps to how you actually work — the tool doesn't enforce one shape:
+cctree gets used three ways in practice. Each maps to a different shape of work; pick the one that fits — the tool doesn't enforce a particular layout.
 
-| Pattern | Tree = | Children = | Why this shape |
+| Pattern | Tree = | Children = | What you get |
 | --- | --- | --- | --- |
-| **Sprint container** | One sprint | One ticket per child (often tagged with the ticket ID) | Quick "did I work on TICKET-X?" lookups, sprint-end retrospectives. Pair with `--tags` and `cctree find`. |
-| **Release container** | A release / feature / MCP server | Research → POC → implementation → polish | Sequential work where each stage benefits from the previous stage's TL;DR + Decisions. The original use case — bidirectional context flow. |
-| **Knowledge container** | A long-running topic (auth, observability, infra) | Each notable conversation, dated | Lab-notebook style. `cctree list --all` + `cctree find` is the search index. Tags optional but helpful (`#research`, `#prod-incident`, `#vendor-eval`). |
+| **Release container** | A release / feature / MCP server | Research → POC → implementation → polish | Bidirectional context flow shines: each stage starts with every prior stage's decisions already in scope. |
+| **Sprint container** | One sprint | One ticket per child (tagged with ticket IDs) | Searchable record of "did I work on TICKET-X?" + sprint-end retro material. |
+| **Knowledge container** | A long-running topic (auth, observability, infra, vendor research) | Each notable conversation, dated and tagged | A queryable lab-notebook of decisions across months of work. |
 
-The bidirectional context flow shines for the release pattern. The other two lean more on naming, tagging, and search — but they're first-class uses, not workarounds.
+The three patterns share the same primitives — what differs is which features you lean on most. Concrete walkthroughs below.
 
-### Software Release Planning
+### Release container — context flows downhill
 
-You're shipping a new feature that spans backend, frontend, and infrastructure. Each area needs its own deep-dive session, but they all need to share context.
+You're shipping a feature that spans backend, frontend, and infra. Each area needs its own deep-dive session, but they all need to share context.
 
 ```bash
-cctree init "Payment Integration" --context docs/payment-spec.md
+cctree init "Payment Integration" --context docs/payment-spec.md docs/api-design.md
+
 cctree branch "Provider Research"         # compare Stripe vs Adyen vs PayPal
-# ... commit back ...
-cctree branch "Database Schema Design"    # design tables knowing the provider choice
-# ... commit back ...
-cctree branch "API Implementation"        # implement knowing schema + provider
-# ... commit back ...
-cctree branch "Frontend Integration"      # build UI knowing the full API
+# ... work, then in Claude: "commit"
+cctree branch "Database Schema Design"    # opens with provider choice already injected
+# ... work, then commit
+cctree branch "API Implementation"        # knows schema + provider
+# ... commit
+cctree branch "Frontend Integration"      # knows the full API surface
 ```
 
-### Cross-Session Knowledge Queries
-
-You're implementing API endpoints and hit a problem that relates to an architecture decision from an earlier session. Without cctree, you'd have to leave your current session, find the architecture session via `/resume`, ask your question there, then switch back and relay the answer manually.
-
-With cctree, the architecture session's summary is already in your context. And if you need more detail:
+Each `cctree branch` opens Claude Code with the accumulated TL;DR + Decisions + Artifacts of all committed siblings already in the system prompt. **No re-explaining**. And when you hit something that needs more detail than the TL;DR captured, ask Claude — it'll call `get_sibling_context` automatically:
 
 ```
 You: I'm getting a circular dependency between the auth middleware and
-     the user service. What did we decide about the dependency graph
-     in the architecture session?
+     the user service. What did we decide about that in the
+     architecture session?
 
-Claude: [uses get_sibling_context with name "Architecture Decisions"]
-        In the architecture session, we decided to use an event-driven
-        pattern to break circular dependencies: the auth middleware
-        publishes a "user.authenticated" event and the user service
-        subscribes to it, rather than direct imports.
+Claude: [calls get_sibling_context("Architecture Research")]
+        You decided to break the cycle with an event-driven pattern —
+        the auth middleware publishes `user.authenticated` and the user
+        service subscribes, rather than direct imports. The reasoning
+        was that direct imports would force auth to depend on the user
+        service's typings...
 ```
 
-No session switching. No copy-pasting. The knowledge from every committed session is queryable from wherever you are.
+No session-hopping. No copy-pasting between sessions. The knowledge of every committed session is queryable from wherever you are.
 
-### Bug Investigation
+When the release ships, `cctree export mermaid --architecture --tree payment-integration` generates a diagram of the architectural decisions and flows that emerged across the sessions — useful for PR descriptions, retro docs, or onboarding the next person who'll touch the area.
 
-A complex production bug that requires multiple investigation angles:
+Same shape applies to bug investigations (children = log analysis → heap dump → fix), technical specs (children = architecture → service scaffold → channel implementations), and any other work where one stage's decisions feed into the next.
+
+### Sprint container — searchable record of "what did I do?"
+
+You run a sprint with a handful of tickets. Each ticket gets its own session; tags let you search them later.
 
 ```bash
-cctree init "Memory Leak Investigation" --context logs/error-dump.txt metrics/grafana-export.json
-cctree branch "Log Analysis"
-# ... commit back findings ...
-cctree branch "Heap Dump Analysis"       # knows what logs already revealed
-# ... commit back ...
-cctree branch "Fix Implementation"       # knows root cause from both analyses
+cctree init "Sprint 23"
+
+cctree branch "TICKET-1234 OAuth refresh bug" --tags ticket-1234,bug
+# work the ticket, commit when done
+
+cctree branch "TICKET-1240 Add idempotency keys" --tags ticket-1240,feature
+# ...
+
+cctree branch "TICKET-1247 Investigate slow query" --tags ticket-1247,perf
 ```
 
-### Technical Spec to Implementation
-
-Turn a spec into working code across multiple sessions:
+Two weeks later, your tech lead asks "did you ever look into the slow query in checkout?" Instead of skimming session names:
 
 ```bash
-cctree init "Notification System" --context specs/notifications-rfc.md
-cctree branch "Architecture Decisions"    # decide message broker, patterns
-# ... commit back ...
-cctree branch "Core Service Scaffold"     # implement base knowing architecture
-# ... commit back ...
-cctree branch "Email Channel"             # implement knowing core service API
-# ... commit back ...
-cctree branch "Push Channel"              # implement knowing core + email patterns
+$ cctree find "slow query"
+Sprint 23 (sprint-23)
+  child-name > TICKET-1247 Investigate slow query: TICKET-1247 Investigate slow query
+  decision > TICKET-1247 Investigate slow query: Added a partial index on orders(checkout_status, created_at)
+  artifact > TICKET-1247 Investigate slow query: db/migrate/20260315_orders_checkout_index.rb
+
+3 matches.
 ```
 
-### Research and Documentation
-
-Accumulate knowledge across multiple research sessions:
+Or filter the list view by tag:
 
 ```bash
-cctree init "Cloud Migration Assessment"
-cctree branch "Current Infrastructure Audit"
-# ... commit back ...
-cctree branch "AWS vs GCP Cost Analysis"    # knows current infra details
-# ... commit back ...
-cctree branch "Migration Plan Draft"        # knows infra + cost analysis
-# ... commit back ...
-cctree branch "Risk Assessment"             # full picture from all prior research
+$ cctree list --all --tag perf
+Sprint 23 (sprint-23)
+└── [committed] TICKET-1247 Investigate slow query (Mar 15) #ticket-1247 #perf
 ```
+
+End of sprint, generate a retro report with `cctree export report sprint-23 --output retro.md`.
+
+### Knowledge container — a queryable lab-notebook
+
+For long-running topics where conversations don't have a natural "release" boundary — auth, observability, vendor evaluations, ops incidents — use one tree per topic and treat each notable conversation as a child. Tags help you slice later.
+
+```bash
+cctree init "Auth Platform"
+
+cctree branch "JWT vs paseto vs sessions" --tags research,vendor-eval
+# ...
+cctree branch "OIDC provider comparison" --tags research,vendor-eval
+# ...
+cctree branch "Prod incident: token leak 2026-04" --tags incident,postmortem
+# ...
+cctree branch "Refresh-token rotation design" --tags design,decision
+```
+
+Three months later: "wait, did we ever decide on JWT or sessions?"
+
+```bash
+$ cctree find "jwt"
+Auth Platform (auth-platform)
+  tldr > JWT vs paseto vs sessions: Compared JWT, PASETO, and stateful sessions; chose JWT with rotation
+  decision > JWT vs paseto vs sessions: Use JWT with 15-min access + 30-day refresh
+  decision > Refresh-token rotation design: Rotate refresh tokens on every use; revoke on family compromise
+
+3 matches.
+```
+
+Filter by `--tag incident` to surface only postmortems. Filter by `--tag decision` for only architectural calls. Run `cctree export mermaid --architecture --tree auth-platform` for a diagram of how the decisions connect across the topic.
+
+### When NOT to use cctree
+
+cctree is overhead for one-off questions or single-session work. You don't need a tree for "fix this typo" or "what does this regex do?". The investment pays off when:
+
+- You'll come back to this work over multiple sessions
+- The sessions are related enough that decisions in one affect another, **or**
+- You want to be able to search/review what you did later
+
+If a single `claude` session does the job, just use `claude`.
 
 ## CLI Reference
 
@@ -367,7 +415,8 @@ cctree rename "Auth v3" --tree auth-service-v2     # target a non-active tree
 
 | Command | Output | Audience |
 | --- | --- | --- |
-| `cctree export mermaid` | A Mermaid `graph TD` block | Quick paste-in for PRs, docs, release notes |
+| `cctree export mermaid` | A Mermaid `graph TD` block (structure) | Quick paste-in for PRs, docs, release notes |
+| `cctree export mermaid --architecture` | A Mermaid diagram of decisions/flows derived from the tree's content via Anthropic | PR descriptions and retros that need to show *what was decided*, not *which sessions ran* |
 | `cctree export obsidian <vault>` | Wiki-linked markdown in an Obsidian vault | Navigable "brain"-style graph view |
 | `cctree export report <tree>` | Shareable markdown progress report | Sprint-level visibility for a tech lead |
 
@@ -407,6 +456,34 @@ ANTHROPIC_API_KEY=sk-... cctree export mermaid --architecture --tree mcp-release
 - Sends only TL;DR + Decisions + Artifacts — Open Questions / Next Steps / Details stay on disk and are never uploaded.
 - The system prompt is marked for ephemeral prompt caching, so repeated runs against trees with the same shape pay near-zero for the system prefix.
 - Output is the raw Mermaid source (no fences, no commentary). Token usage and cache stats are printed to stderr.
+
+Example output for an MCP release tree (the model chose `flowchart LR`; for stateful flows it'd pick `sequenceDiagram` or `stateDiagram-v2`):
+
+```mermaid
+flowchart LR
+  Spec[MCP spec] --> Transport{Transport choice}
+  Transport -->|chosen| Stdio[stdio]
+  Transport -.->|rejected| SSE[SSE]
+  Stdio --> Server[src/server.ts]
+  Server --> Tools[Tool registry]
+  Tools --> CommitTool[commit_to_parent]
+  Tools --> ContextTool[get_sibling_context]
+  CommitTool --> Validator[summary-validator]
+  Validator --> Layered[Layered TL;DR + Decisions + Artifacts]
+  Layered --> Inject[Inject into next sibling]
+```
+
+Compare to the structural mode of the same tree:
+
+```mermaid
+graph TD
+  mcp_release["<b>MCP Release</b><br/>(mcp-release)<br/>3 committed"]
+  mcp_release --> mcp_release__transport_research["Transport research<br/>✓ Mar 12"]
+  mcp_release --> mcp_release__server_skeleton["Server skeleton<br/>✓ Mar 14"]
+  mcp_release --> mcp_release__tool_registration["Tool registration<br/>✓ Mar 16"]
+```
+
+Both have their place. Use structural to remember *what sessions ran when*; use architecture to remember *what got decided and how it fits together*.
 
 ### `cctree export obsidian <vault-path> [--tree <name>]`
 
