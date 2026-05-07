@@ -73,10 +73,18 @@ describe('rebuildContext', () => {
       created_at: '2026-04-16T11:00:00Z',
     });
 
-    await saveChildSummary('multi', 'first', '## Decisions\n- Decision A');
+    await saveChildSummary(
+      'multi',
+      'first',
+      '## TL;DR\nFirst session.\n\n## Decisions\n- Decision A',
+    );
     await updateChildStatus('multi', 'first', 'committed', '2026-04-16T12:00:00Z');
 
-    await saveChildSummary('multi', 'second', '## Decisions\n- Decision B');
+    await saveChildSummary(
+      'multi',
+      'second',
+      '## TL;DR\nSecond session.\n\n## Decisions\n- Decision B',
+    );
     await updateChildStatus('multi', 'second', 'committed', '2026-04-16T13:00:00Z');
 
     const content = await rebuildContext('multi');
@@ -89,6 +97,69 @@ describe('rebuildContext', () => {
     const firstIdx = content.indexOf('Session: First');
     const secondIdx = content.indexOf('Session: Second');
     expect(firstIdx).toBeLessThan(secondIdx);
+  });
+
+  it('only injects TL;DR + Decisions + Artifacts, never Open Questions / Next Steps / Details', async () => {
+    await createTree('Layer', TEST_DIR, []);
+    await addChild('layer', {
+      name: 'WithDetails',
+      slug: 'with-details',
+      status: 'active',
+      claude_session_name: 'Layer > WithDetails',
+      created_at: '2026-04-16T10:00:00Z',
+    });
+
+    const summary = [
+      '## TL;DR',
+      'Investigated transports.',
+      '',
+      '## Decisions',
+      '- Use stdio',
+      '',
+      '## Artifacts',
+      '- src/server.ts',
+      '',
+      '## Open Questions',
+      '- SSE later?',
+      '',
+      '## Next Steps',
+      '- Wire up host',
+      '',
+      '## Details',
+      'Long verbose research notes.',
+    ].join('\n');
+
+    await saveChildSummary('layer', 'with-details', summary);
+    await updateChildStatus(
+      'layer',
+      'with-details',
+      'committed',
+      '2026-04-16T12:00:00Z',
+    );
+
+    const content = await rebuildContext('layer');
+    expect(content).toContain('Investigated transports');
+    expect(content).toContain('Use stdio');
+    expect(content).toContain('src/server.ts');
+    expect(content).not.toContain('SSE later');
+    expect(content).not.toContain('Wire up host');
+    expect(content).not.toContain('Long verbose research notes');
+  });
+
+  it('falls back to verbatim content for legacy summaries with no recognized sections', async () => {
+    await createTree('Legacy', TEST_DIR, []);
+    await addChild('legacy', {
+      name: 'Old',
+      slug: 'old',
+      status: 'active',
+      claude_session_name: 'Legacy > Old',
+      created_at: '2026-04-16T10:00:00Z',
+    });
+    await saveChildSummary('legacy', 'old', 'Just plain notes, no headers.');
+    await updateChildStatus('legacy', 'old', 'committed', '2026-04-16T11:00:00Z');
+
+    const content = await rebuildContext('legacy');
+    expect(content).toContain('Just plain notes, no headers.');
   });
 
   it('excludes active and abandoned children', async () => {

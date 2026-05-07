@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { parseSummarySections } from '../../src/lib/summary-sections.js';
+import {
+  parseSummarySections,
+  renderInjectableMarkdown,
+} from '../../src/lib/summary-sections.js';
 
 describe('parseSummarySections', () => {
   it('parses the canonical four sections', () => {
@@ -126,10 +129,102 @@ describe('parseSummarySections', () => {
   it('returns empty sections for an empty summary', () => {
     const out = parseSummarySections('');
     expect(out).toEqual({
+      tldr: '',
       decisions: [],
       artifactsCreated: [],
       openQuestions: [],
       nextSteps: [],
+      details: '',
     });
+  });
+
+  it('parses ## TL;DR as free text (single paragraph)', () => {
+    const md = `## TL;DR
+Investigated MCP stdio vs SSE transport.
+
+## Decisions
+- Use stdio`;
+    const out = parseSummarySections(md);
+    expect(out.tldr).toBe('Investigated MCP stdio vs SSE transport.');
+    expect(out.decisions).toEqual(['Use stdio']);
+  });
+
+  it('parses ## Details as free text preserving line breaks', () => {
+    const md = `## TL;DR
+Short.
+
+## Decisions
+- A
+
+## Details
+Long notes go here.
+They span multiple lines.
+
+Even with blank lines between paragraphs.`;
+    const out = parseSummarySections(md);
+    expect(out.details).toContain('Long notes go here.');
+    expect(out.details).toContain('They span multiple lines.');
+    expect(out.details).toContain('Even with blank lines between paragraphs.');
+  });
+
+  it('accepts Portuguese aliases for TL;DR and Details', () => {
+    const md = `## Resumo
+Resumo curto.
+
+## Decisions
+- d
+
+## Detalhes
+Notas longas.`;
+    const out = parseSummarySections(md);
+    expect(out.tldr).toBe('Resumo curto.');
+    expect(out.details).toBe('Notas longas.');
+  });
+});
+
+describe('renderInjectableMarkdown', () => {
+  it('renders only TL;DR + Decisions + Artifacts', () => {
+    const out = renderInjectableMarkdown({
+      tldr: 'A short summary.',
+      decisions: ['Use TS', 'Vendor SDK X'],
+      artifactsCreated: ['src/foo.ts', 'src/bar.ts'],
+      openQuestions: ['unused?'],
+      nextSteps: ['unused?'],
+      details: 'verbose notes',
+    });
+    expect(out).toContain('## TL;DR');
+    expect(out).toContain('A short summary.');
+    expect(out).toContain('## Decisions');
+    expect(out).toContain('- Use TS');
+    expect(out).toContain('## Artifacts');
+    expect(out).toContain('- src/foo.ts');
+    expect(out).not.toContain('## Open Questions');
+    expect(out).not.toContain('## Next Steps');
+    expect(out).not.toContain('## Details');
+    expect(out).not.toContain('verbose notes');
+  });
+
+  it('skips empty layers', () => {
+    const out = renderInjectableMarkdown({
+      tldr: 'Only a tldr.',
+      decisions: [],
+      artifactsCreated: [],
+      openQuestions: [],
+      nextSteps: [],
+      details: '',
+    });
+    expect(out).toBe('## TL;DR\nOnly a tldr.');
+  });
+
+  it('returns empty string when nothing is injectable', () => {
+    const out = renderInjectableMarkdown({
+      tldr: '',
+      decisions: [],
+      artifactsCreated: [],
+      openQuestions: ['only questions'],
+      nextSteps: [],
+      details: 'only details',
+    });
+    expect(out).toBe('');
   });
 });
