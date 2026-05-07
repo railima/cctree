@@ -92,6 +92,16 @@ This session already knows every architecture decision from session 1. When done
 
 ## Use Cases
 
+cctree gets used three ways in practice. Pick whichever maps to how you actually work — the tool doesn't enforce one shape:
+
+| Pattern | Tree = | Children = | Why this shape |
+| --- | --- | --- | --- |
+| **Sprint container** | One sprint | One ticket per child (often tagged with the ticket ID) | Quick "did I work on TICKET-X?" lookups, sprint-end retrospectives. Pair with `--tags` and `cctree find`. |
+| **Release container** | A release / feature / MCP server | Research → POC → implementation → polish | Sequential work where each stage benefits from the previous stage's TL;DR + Decisions. The original use case — bidirectional context flow. |
+| **Knowledge container** | A long-running topic (auth, observability, infra) | Each notable conversation, dated | Lab-notebook style. `cctree list --all` + `cctree find` is the search index. Tags optional but helpful (`#research`, `#prod-incident`, `#vendor-eval`). |
+
+The bidirectional context flow shines for the release pattern. The other two lean more on naming, tagging, and search — but they're first-class uses, not workarounds.
+
 ### Software Release Planning
 
 You're shipping a new feature that spans backend, frontend, and infrastructure. Each area needs its own deep-dive session, but they all need to share context.
@@ -185,21 +195,24 @@ cctree init "Quick Investigation"    # no initial context files
 - Sets this tree as the active tree
 - Generates the initial `context.md`
 
-### `cctree branch <name> [--no-open] [--worktree [branch]]`
+### `cctree branch <name> [--no-open] [--worktree [branch]] [--tags <list>]`
 
 Create a child session and open Claude Code.
 
 ```bash
 cctree branch "API Design"
-cctree branch "Prototype" --no-open         # create entry without opening Claude
-cctree branch "API Design" --worktree       # isolate in a git worktree
-cctree branch "API Design" -w feature/api   # worktree with a specific branch name
+cctree branch "Prototype" --no-open                    # create entry without opening Claude
+cctree branch "API Design" --worktree                  # isolate in a git worktree
+cctree branch "API Design" -w feature/api              # worktree with a specific branch name
+cctree branch "TICKET-1234" --tags ticket-1234,bug     # tag for later search
 ```
 
 - Rebuilds `context.md` with all committed siblings
 - Injects context via `--append-system-prompt-file`
 - Opens Claude Code with `--name "TreeName > ChildName"`
 - Writes active session state for MCP tools
+
+**With `--tags`:** comma-separated list, normalized to lowercase-with-dashes (`Sprint 2, Bug Fix` → `sprint-2`, `bug-fix`). Tags are persisted on the child and surfaced by `cctree list --tag <tag>`, `cctree list --search <query>`, and `cctree find <query>`. The MCP `commit_to_parent` tool also accepts a `tags` argument so Claude can tag (or re-tag) a session at commit time without you having to re-run `cctree branch`.
 
 **With `--worktree`:** cctree creates a linked [git worktree](https://git-scm.com/docs/git-worktree) at `~/.cctree/trees/<tree-slug>/worktrees/<child-slug>/` on a fresh branch (default name: `cctree/<tree-slug>/<child-slug>`, branched from the current `HEAD` of the tree's working directory). Claude Code launches inside the worktree, so sibling sessions can run in parallel without trampling each other's files. `cctree resume` will also reopen the session there. If the branch name you pass already exists, it's checked out into the worktree instead of being created.
 
@@ -219,25 +232,54 @@ cctree resume "API Design"
 cctree resume api-design        # also accepts slugs
 ```
 
-### `cctree list [--all]`
+### `cctree list [--all] [--tag <tag>] [--search <query>]`
 
 Show the session tree.
 
 ```bash
-cctree list           # show active tree only
-cctree list --all     # show all trees
+cctree list                          # show active tree only
+cctree list --all                    # show all trees
+cctree list --tag ticket-1234        # only sessions tagged "ticket-1234"
+cctree list --search oauth           # only sessions with "oauth" in name/tags/TL;DR/decisions
+cctree list --all --search payment   # search across every tree
 ```
 
-Output:
+Output (with tags):
 ```
 Auth Service v2 (auth-service-v2) (active)
-├── [committed] Architecture Research (Apr 16)
-├── [committed] Database Schema (Apr 17)
+├── [committed] Architecture Research (Apr 16) #research #spike
+├── [committed] Database Schema (Apr 17) #ticket-1234
 ├── [active]    API Implementation
 └── [abandoned] Old Approach
 ```
 
 The slug in parentheses is the one you can pass to `cctree use` or `cctree resume`.
+
+`--tag` matches a tag exactly (case-insensitive). `--search` is a case-insensitive substring match against tree/session names, tags, and the **TL;DR + Decisions + Artifacts** of committed sessions (Open Questions / Next Steps / Details are intentionally not searched). For broader, multi-tree retrieval grouped by where the hit landed, use `cctree find`.
+
+### `cctree find <query>`
+
+Search every tree for hits in tree/session names, tags, TL;DR, decisions, and artifacts. Useful for "did I work on ticket X?" and "where did we decide Y?" lookups.
+
+```bash
+cctree find ticket-1234
+cctree find "oauth refresh"
+```
+
+Output groups matches by tree and labels each by which field hit:
+
+```
+Sprint 2 (sprint-2)
+  tag > TICKET-1234 auth bug: #ticket-1234
+  decision > TICKET-1234 auth bug: Use a mutex around token refresh
+
+MCP Release (mcp-release)
+  decision > Transport research: Use stdio transport
+
+3 matches.
+```
+
+Exits with code 1 (no matches) for use in shell pipelines.
 
 ### `cctree status`
 
@@ -331,7 +373,7 @@ cctree rename "Auth v3" --tree auth-service-v2     # target a non-active tree
 
 All three are also exposed as MCP tools (`export_mermaid`, `export_obsidian`, `export_report`) so Claude can invoke them directly when you ask — see the [MCP Tools section](#mcp-tools-inside-claude-code) below.
 
-### `cctree export mermaid [--tree <name>] [--output <file>]`
+### `cctree export mermaid [--tree <name>] [--output <file>] [--architecture]`
 
 Render the session trees as a [Mermaid](https://mermaid.js.org/) graph diagram. GitHub, Obsidian, Notion, and VSCode all render Mermaid natively, so the output pastes directly into PR descriptions, docs, or release notes.
 
@@ -351,6 +393,20 @@ graph TD
   auth_service_v2 --> auth_service_v2__database_schema["Database Schema<br/>✓ Apr 17"]
   auth_service_v2 --> auth_service_v2__api_implementation["API Implementation<br/>⚡ active"]
 ```
+
+#### `--architecture` (LLM-generated decision diagram)
+
+The default mode draws the **structure** of the tree. Add `--architecture --tree <name>` and cctree calls Anthropic with the committed sessions' TL;DR + Decisions + Artifacts and asks for a Mermaid diagram of the architectural decisions, components, and flows that emerge across them. The model picks the diagram type (flowchart, sequence, state, class, ER) based on what fits.
+
+```bash
+ANTHROPIC_API_KEY=sk-... cctree export mermaid --architecture --tree mcp-release
+ANTHROPIC_API_KEY=sk-... cctree export mermaid --architecture --tree mcp-release -o arch.mmd
+```
+
+- Requires `ANTHROPIC_API_KEY` in the environment. Without it the command exits with a clear message; the deterministic structural mode (no flag) is always available as the fallback.
+- Sends only TL;DR + Decisions + Artifacts — Open Questions / Next Steps / Details stay on disk and are never uploaded.
+- The system prompt is marked for ephemeral prompt caching, so repeated runs against trees with the same shape pay near-zero for the system prefix.
+- Output is the raw Mermaid source (no fences, no commentary). Token usage and cache stats are printed to stderr.
 
 ### `cctree export obsidian <vault-path> [--tree <name>]`
 
@@ -451,23 +507,37 @@ Commits a structured summary back to the parent tree.
 
 **When to use:** At the end of a session when the user says "commit", "save to parent", "sync back", or similar.
 
-**Summary format:**
+**Summary format (layered):** `## TL;DR` and `## Decisions` are required. `## Artifacts`, `## Open Questions`, `## Next Steps`, and `## Details` are optional. Only **TL;DR + Decisions + Artifacts** are injected into the next sibling's system prompt — everything else stays on disk and is read on demand via `get_sibling_context`. Nothing is truncated; put as much detail as you want under `## Details`.
+
 ```markdown
+## TL;DR
+Decided on PostgreSQL + JWT auth and stubbed the users table.
+
 ## Decisions
 - Chose PostgreSQL over MongoDB for ACID compliance
 - REST API with versioned endpoints (/v1/...)
+- JWT over session-based auth (stateless services, easier rotation)
 
-## Artifacts Created
-- Migration file: db/migrate/001_create_users.rb
-- API controller: app/controllers/users_controller.rb
+## Artifacts
+- db/migrate/001_create_users.rb
+- app/controllers/users_controller.rb
 
 ## Open Questions
-- Should we use JWT or session-based auth?
+- Should we add refresh-token rotation now or in a follow-up?
 
 ## Next Steps
 - Implement authentication middleware
 - Add rate limiting
+
+## Details
+Long-form notes, alternatives considered, links to discussions, etc.
+This stays on disk and is NOT injected into siblings — but `get_sibling_context`
+returns the full file when another session needs to look it up.
 ```
+
+**Optional `tags` argument:** pass an array of tags (e.g. `["ticket-1234", "bug"]`) to attach them to the child at commit time. Replaces any tags previously set on that child. The same tags are used by `cctree list --tag` and `cctree find`.
+
+If `## TL;DR` or `## Decisions` is missing, the tool returns an error with the expected schema. The validator never truncates or caps the bullet count — write as many decisions as the work actually produced.
 
 ### `get_tree_status`
 

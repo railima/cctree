@@ -21,6 +21,7 @@ export interface ChildSession {
   created_at: string;
   committed_at?: string;
   worktree?: WorktreeInfo;
+  tags?: string[];
 }
 
 export interface ActiveSession {

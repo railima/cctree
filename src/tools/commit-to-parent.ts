@@ -13,6 +13,8 @@ import {
   validateSummary,
   SummaryValidationError,
 } from '../lib/summary-validator.js';
+import { setChildTags } from '../lib/storage.js';
+import { normalizeTags } from '../lib/tags.js';
 
 export interface CommitResult {
   tree: string;
@@ -22,7 +24,10 @@ export interface CommitResult {
   warnings: string[];
 }
 
-export async function commitToParent(summary: string): Promise<CommitResult> {
+export async function commitToParent(
+  summary: string,
+  tags?: string[],
+): Promise<CommitResult> {
   const session = await readActiveSession();
   if (!session) {
     throw new Error(
@@ -44,6 +49,11 @@ export async function commitToParent(summary: string): Promise<CommitResult> {
 
   await saveChildSummary(session.tree, session.child, summary);
   await updateChildStatus(session.tree, session.child, 'committed', now);
+
+  if (tags !== undefined) {
+    await setChildTags(session.tree, session.child, normalizeTags(tags));
+  }
+
   await rebuildContext(session.tree);
 
   const ctxPath = contextPath(session.tree);
@@ -90,11 +100,18 @@ export function registerCommitToParent(server: McpServer): void {
           .string()
           .max(100_000)
           .describe(SUMMARY_SCHEMA_DESCRIPTION),
+        tags: z
+          .array(z.string().min(1).max(64))
+          .max(20)
+          .optional()
+          .describe(
+            'Optional tags for this session (e.g. ["ticket-1234", "bug"]). Persisted on the child and used by `cctree list --tag` and `cctree find`. Replaces any tags previously set.',
+          ),
       },
     },
-    async ({ summary }) => {
+    async ({ summary, tags }) => {
       try {
-        const result = await commitToParent(summary);
+        const result = await commitToParent(summary, tags);
         const verb = result.totalCommitted > 1 ? 'Updated' : 'Committed';
         const lines = [
           `${verb} summary for "${result.child}" to tree "${result.tree}".`,

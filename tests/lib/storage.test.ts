@@ -47,6 +47,7 @@ import {
   resolveTree,
   abandonChild,
   renameTree,
+  setChildTags,
 } from '../../src/lib/storage.js';
 import type { ChildSession } from '../../src/types/index.js';
 import { execFile } from 'node:child_process';
@@ -215,6 +216,46 @@ describe('childSummary', () => {
     await createTree('Tree', TEST_DIR, []);
     await expect(loadChildSummary('tree', 'missing')).rejects.toThrow(
       'not have been committed',
+    );
+  });
+});
+
+describe('setChildTags', () => {
+  it('persists tags on the child', async () => {
+    await createTree('Tagged', TEST_DIR, []);
+    await addChild('tagged', {
+      name: 'A',
+      slug: 'a',
+      status: 'active',
+      claude_session_name: 'Tagged > A',
+      created_at: new Date().toISOString(),
+    });
+
+    await setChildTags('tagged', 'a', ['ticket-1234', 'bug']);
+    const tree = await loadTree('tagged');
+    expect(tree.children[0].tags).toEqual(['ticket-1234', 'bug']);
+  });
+
+  it('removes the tags field when set to empty', async () => {
+    await createTree('Tagged', TEST_DIR, []);
+    await addChild('tagged', {
+      name: 'A',
+      slug: 'a',
+      status: 'active',
+      claude_session_name: 'Tagged > A',
+      created_at: new Date().toISOString(),
+      tags: ['old-tag'],
+    });
+
+    await setChildTags('tagged', 'a', []);
+    const tree = await loadTree('tagged');
+    expect(tree.children[0].tags).toBeUndefined();
+  });
+
+  it('throws when child does not exist', async () => {
+    await createTree('Tagged', TEST_DIR, []);
+    await expect(setChildTags('tagged', 'nope', ['x'])).rejects.toThrow(
+      'not found',
     );
   });
 });

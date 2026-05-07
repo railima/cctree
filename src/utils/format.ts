@@ -36,8 +36,12 @@ export function formatTree(tree: TreeConfig, isActive: boolean): string {
     const connector = isLast ? '\u2514\u2500\u2500' : '\u251C\u2500\u2500';
     const date = child.committed_at ? shortDate(child.committed_at) : shortDate(child.created_at);
     const worktreeTag = child.worktree ? ` ${DIM}[worktree: ${child.worktree.branch}]${RESET}` : '';
+    const tagsTag =
+      child.tags && child.tags.length > 0
+        ? ` ${DIM}#${child.tags.join(' #')}${RESET}`
+        : '';
     lines.push(
-      `${connector} [${statusLabel(child.status)}] ${child.name} ${DIM}(${date})${RESET}${worktreeTag}`,
+      `${connector} [${statusLabel(child.status)}] ${child.name} ${DIM}(${date})${RESET}${tagsTag}${worktreeTag}`,
     );
   }
 
@@ -57,7 +61,13 @@ export function formatTreePlain(tree: TreeConfig): string {
     const isLast = i === tree.children.length - 1;
     const connector = isLast ? '\u2514\u2500\u2500' : '\u251C\u2500\u2500';
     const worktreeTag = child.worktree ? ` [worktree: ${child.worktree.branch}]` : '';
-    lines.push(`${connector} [${child.status}] ${child.name}${worktreeTag}`);
+    const tagsTag =
+      child.tags && child.tags.length > 0
+        ? ` #${child.tags.join(' #')}`
+        : '';
+    lines.push(
+      `${connector} [${child.status}] ${child.name}${tagsTag}${worktreeTag}`,
+    );
   }
 
   return lines.join('\n');
