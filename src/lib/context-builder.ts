@@ -3,6 +3,18 @@ import { join } from 'node:path';
 import { initialContextDir, childrenDir, contextPath } from './config.js';
 import { loadTree } from './storage.js';
 import { CONTEXT_HOOK_MAX_CHARS } from './config.js';
+import {
+  parseSummarySections,
+  renderInjectableMarkdown,
+} from './summary-sections.js';
+
+function injectableFromSummary(raw: string): string {
+  const parsed = parseSummarySections(raw);
+  const rendered = renderInjectableMarkdown(parsed);
+  // Legacy summaries may not match any known section header; in that case
+  // fall back to the verbatim content so we don't silently lose context.
+  return rendered.length > 0 ? rendered : raw.trim();
+}
 
 export async function rebuildContext(treeSlug: string): Promise<string> {
   const config = await loadTree(treeSlug).catch(() => null);
@@ -40,6 +52,9 @@ export async function rebuildContext(treeSlug: string): Promise<string> {
       try {
         const summaryPath = join(childrenDir(treeSlug), `${child.slug}.md`);
         const content = await readFile(summaryPath, 'utf-8');
+        const injectable = injectableFromSummary(content);
+        if (injectable.length === 0) continue;
+
         const date = child.committed_at
           ? new Date(child.committed_at).toLocaleDateString('en-US', {
               month: 'short',
@@ -50,7 +65,7 @@ export async function rebuildContext(treeSlug: string): Promise<string> {
 
         sections.push(`## Session: ${child.name}${date ? ` (${date})` : ''}`);
         sections.push('');
-        sections.push(content.trim());
+        sections.push(injectable);
         sections.push('');
       } catch {
         // skip children without summaries

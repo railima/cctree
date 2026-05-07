@@ -229,6 +229,26 @@ export async function saveChildSummary(
   await writeFile(childSummaryPath(treeSlug, childSlug), content);
 }
 
+export async function setChildTags(
+  treeSlug: string,
+  childSlug: string,
+  tags: string[],
+): Promise<void> {
+  const config = await loadTree(treeSlug);
+  const child = config.children.find((c) => c.slug === childSlug);
+  if (!child) {
+    throw new Error(
+      `Child session "${childSlug}" not found in tree "${config.name}".`,
+    );
+  }
+  if (tags.length === 0) {
+    delete child.tags;
+  } else {
+    child.tags = tags;
+  }
+  await saveTree(config);
+}
+
 export async function loadChildSummary(
   treeSlug: string,
   childSlug: string,

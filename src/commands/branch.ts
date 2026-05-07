@@ -15,10 +15,12 @@ import {
   revParseHead,
 } from '../lib/git.js';
 import type { ChildSession, WorktreeInfo } from '../types/index.js';
+import { parseTagList } from '../lib/tags.js';
 
 export interface BranchOptions {
   open: boolean;
   worktree?: string | boolean;
+  tags?: string;
 }
 
 async function setupWorktree(
@@ -59,6 +61,8 @@ export async function branchCommand(
       worktree = await setupWorktree(tree.cwd, tree.slug, slug, branchOverride);
     }
 
+    const tags = parseTagList(options.tags);
+
     const child: ChildSession = {
       name,
       slug,
@@ -66,6 +70,7 @@ export async function branchCommand(
       claude_session_name: sessionName,
       created_at: new Date().toISOString(),
       ...(worktree ? { worktree } : {}),
+      ...(tags.length > 0 ? { tags } : {}),
     };
 
     await addChild(tree.slug, child);
@@ -77,6 +82,9 @@ export async function branchCommand(
     await writeActiveSession({ tree: tree.slug, child: slug });
 
     console.log(`Session "${name}" created in tree "${tree.name}".`);
+    if (tags.length > 0) {
+      console.log(`  Tags:     ${tags.join(', ')}`);
+    }
     if (worktree) {
       console.log(`  Worktree: ${worktree.path}`);
       console.log(`  Branch:   ${worktree.branch}`);

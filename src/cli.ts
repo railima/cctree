@@ -35,10 +35,18 @@ program
     '-w, --worktree [branch]',
     'create a git worktree for this session (branch defaults to cctree/<tree>/<child>)',
   )
+  .option(
+    '--tags <list>',
+    'comma-separated tags for this session (e.g. "ticket-123,bug,research")',
+  )
   .action(
     async (
       name: string,
-      options: { open: boolean; worktree?: string | boolean },
+      options: {
+        open: boolean;
+        worktree?: string | boolean;
+        tags?: string;
+      },
     ) => {
       const { branchCommand } = await import('./commands/branch.js');
       await branchCommand(name, options);
@@ -49,9 +57,30 @@ program
   .command('list')
   .description('Show the session tree')
   .option('-a, --all', 'show all trees, not just the active one')
-  .action(async (options: { all?: boolean }) => {
+  .option('--tag <tag>', 'only show sessions tagged with <tag>')
+  .option(
+    '--search <query>',
+    'only show sessions matching <query> in name, tags, TL;DR, or decisions',
+  )
+  .action(
+    async (options: {
+      all?: boolean;
+      tag?: string;
+      search?: string;
+    }) => {
     const { listCommand } = await import('./commands/list.js');
     await listCommand(options);
+  });
+
+program
+  .command('find')
+  .description(
+    'Search across all trees for matches in tree/session names, tags, TL;DR, decisions, and artifacts',
+  )
+  .argument('<query>', 'substring to search for (case-insensitive)')
+  .action(async (query: string) => {
+    const { findCommand } = await import('./commands/find.js');
+    await findCommand(query);
   });
 
 program
@@ -121,10 +150,20 @@ exportCmd
   .description('Render the session trees as a Mermaid graph diagram')
   .option('-t, --tree <name>', 'render only one tree (name or slug); defaults to all trees')
   .option('-o, --output <file>', 'write the diagram to a file instead of stdout')
-  .action(async (options: { tree?: string; output?: string }) => {
-    const { exportMermaidCommand } = await import('./commands/export.js');
-    await exportMermaidCommand(options);
-  });
+  .option(
+    '--architecture',
+    'derive an architecture diagram (decisions, components, flows) from the committed session summaries via Anthropic; requires ANTHROPIC_API_KEY and --tree',
+  )
+  .action(
+    async (options: {
+      tree?: string;
+      output?: string;
+      architecture?: boolean;
+    }) => {
+      const { exportMermaidCommand } = await import('./commands/export.js');
+      await exportMermaidCommand(options);
+    },
+  );
 
 exportCmd
   .command('obsidian')
