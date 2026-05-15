@@ -7,6 +7,8 @@ import { registerGetSiblingContext } from './tools/get-sibling-context.js';
 import { registerExportMermaid } from './tools/export-mermaid.js';
 import { registerExportObsidian } from './tools/export-obsidian.js';
 import { registerExportReport } from './tools/export-report.js';
+import { registerGetArchitectureContext } from './tools/get-architecture-context.js';
+import { registerExportArchitecturePrompt } from './prompts/export-architecture.js';
 
 const require = createRequire(import.meta.url);
 const { version } = require('../package.json') as { version: string };
@@ -22,6 +24,8 @@ registerGetSiblingContext(server);
 registerExportMermaid(server);
 registerExportObsidian(server);
 registerExportReport(server);
+registerGetArchitectureContext(server);
+registerExportArchitecturePrompt(server);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

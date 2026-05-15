@@ -56,7 +56,7 @@ npm install -g @railima/cctree
 cctree mcp-install
 ```
 
-Isso registra o `cctree` como servidor MCP para que as sessões do Claude Code tenham acesso às tools `commit_to_parent`, `get_tree_status`, `get_sibling_context`, `export_mermaid`, `export_obsidian` e `export_report`.
+Isso registra o `cctree` como servidor MCP para que as sessões do Claude Code tenham acesso às tools `commit_to_parent`, `get_tree_status`, `get_sibling_context`, `export_mermaid`, `export_obsidian`, `export_report` e `get_architecture_context` — além do prompt slash-command `/mcp__cctree__export_architecture`.
 
 ### Criar a primeira tree
 
@@ -300,11 +300,12 @@ O `cctree` tem três comandos de export que transformam o estado acumulado das t
 
 | Comando | Output | Público |
 | --- | --- | --- |
-| `cctree export mermaid` | Bloco Mermaid `graph TD` | Paste rápido em PR, docs, release notes |
+| `cctree export mermaid` | Bloco Mermaid `graph TD` (estrutura da tree) | Paste rápido em PR, docs, release notes |
+| `/mcp__cctree__export_architecture` (no chat) | Artefato de arquitetura (diagrama Mermaid, página HTML standalone, ASCII…) sintetizado pelo Claude do chat a partir dos TL;DRs + Decisões + Artefatos da branch | PR descriptions e retros que precisam mostrar *o que foi decidido*, não *quais sessões rodaram* |
 | `cctree export obsidian <vault>` | Markdown wiki-linkado pra vault Obsidian | Navegação "cérebro" estilo graph view |
 | `cctree export report <tree>` | Progress report em markdown pra compartilhar | Visibilidade sprint-level pro tech lead |
 
-Os três também são MCP tools (`export_mermaid`, `export_obsidian`, `export_report`), então o Claude pode chamar direto quando você pede — veja a [seção Tools MCP](#tools-mcp-dentro-do-claude-code).
+Os quatro também aparecem via MCP — `export_mermaid`, `export_obsidian` e `export_report` são tools que o Claude chama direto; `export_architecture` é tanto um prompt slash-command quanto a tool `get_architecture_context`. Veja a [seção Tools MCP](#tools-mcp-dentro-do-claude-code).
 
 ### `cctree export mermaid [--tree <nome>] [--output <arquivo>]`
 
@@ -428,8 +429,15 @@ Essas tools ficam disponíveis para o Claude dentro de sessões lançadas via `c
 | `export_mermaid` | Renderiza as trees como diagrama Mermaid (`graph TD`) |
 | `export_obsidian` | Exporta as trees como markdown wiki-linkado pra um vault do Obsidian |
 | `export_report` | Gera o progress report em markdown de uma tree pra compartilhar |
+| `get_architecture_context` | Devolve o contexto da branch (TL;DR + Decisões + Artefatos + Hot files de cada filho commitado) pro Claude sintetizar em diagrama Mermaid, página HTML standalone, ASCII, etc. — sem `ANTHROPIC_API_KEY`, usando o próprio modelo do chat |
 
-`export_mermaid`, `export_obsidian` e `export_report` não exigem sessão cctree ativa — o Claude pode chamá-las de qualquer repo. Todas aceitam `tree` (no caso do `export_report`, obrigatório; nos outros, opcional como filtro). `export_obsidian` também recebe `vaultPath` (obrigatório). `export_report` aceita opcionalmente `children` (lista de slugs de filhos pra cherry-pick) e `author` (override do nome detectado automaticamente).
+E um prompt slash-command:
+
+| Prompt | O que faz |
+|--------|-----------|
+| `/mcp__cctree__export_architecture` | Carrega o contexto da branch e pede pro Claude do chat sintetizar o artefato. Args opcionais: `tree=<nome-ou-slug>`, `format=mermaid\|html\|ascii\|auto` (default `auto`) |
+
+`export_mermaid`, `export_obsidian`, `export_report` e `get_architecture_context` não exigem sessão cctree ativa — o Claude pode chamá-las de qualquer repo. Todas aceitam `tree` (no caso do `export_report`, obrigatório; nos outros, opcional como filtro). `export_obsidian` também recebe `vaultPath` (obrigatório). `export_report` aceita opcionalmente `children` (lista de slugs de filhos pra cherry-pick) e `author` (override do nome detectado automaticamente). `get_architecture_context` aceita `format=markdown|json` para a serialização do contexto retornado.
 
 ### Formato do summary ao commitar
 

@@ -51,7 +51,7 @@ A **tree** is a managed document on disk (not a Claude session — it doesn't bu
 2. **`cctree branch <name> [--tags ...]`** — create a child session; Claude Code opens with the accumulated layered context already injected
 3. **`commit_to_parent`** — when the work is done, Claude (or you) commits a summary with `## TL;DR`, `## Decisions`, optional `## Artifacts` / `## Open Questions` / `## Next Steps` / `## Details`
 4. **Next sibling automatically inherits** the TL;DR + Decisions + Artifacts of every committed session before it
-5. **Search and review later** — `cctree list --all`, `cctree list --tag <tag>`, `cctree find <query>`, `cctree export mermaid --architecture`
+5. **Search and review later** — `cctree list --all`, `cctree list --tag <tag>`, `cctree find <query>`, or in a Claude Code chat `/mcp__cctree__export_architecture`
 
 ## Quick Start
 
@@ -67,7 +67,7 @@ npm install -g @railima/cctree
 cctree mcp-install
 ```
 
-This registers `cctree` as an MCP server so Claude Code sessions have access to the `commit_to_parent`, `get_tree_status`, `get_sibling_context`, `export_mermaid`, `export_obsidian`, and `export_report` tools.
+This registers `cctree` as an MCP server so Claude Code sessions have access to the `commit_to_parent`, `get_tree_status`, `get_sibling_context`, `export_mermaid`, `export_obsidian`, `export_report`, and `get_architecture_context` tools — plus the `/mcp__cctree__export_architecture` slash-command prompt.
 
 ### Create your first tree
 
@@ -146,7 +146,7 @@ Claude: [calls get_sibling_context("Architecture Research")]
 
 No session-hopping. No copy-pasting between sessions. The knowledge of every committed session is queryable from wherever you are.
 
-When the release ships, `cctree export mermaid --architecture --tree payment-integration` generates a diagram of the architectural decisions and flows that emerged across the sessions — useful for PR descriptions, retro docs, or onboarding the next person who'll touch the area.
+When the release ships, ask Claude in your chat — `/mcp__cctree__export_architecture tree=payment-integration` — and it produces a diagram (Mermaid, an HTML page, ASCII, your call) of the architectural decisions and flows that emerged across the sessions, useful for PR descriptions, retro docs, or onboarding the next person who'll touch the area.
 
 Same shape applies to bug investigations (children = log analysis → heap dump → fix), technical specs (children = architecture → service scaffold → channel implementations), and any other work where one stage's decisions feed into the next.
 
@@ -216,7 +216,7 @@ Auth Platform (auth-platform)
 3 matches.
 ```
 
-Filter by `--tag incident` to surface only postmortems. Filter by `--tag decision` for only architectural calls. Run `cctree export mermaid --architecture --tree auth-platform` for a diagram of how the decisions connect across the topic.
+Filter by `--tag incident` to surface only postmortems. Filter by `--tag decision` for only architectural calls. Inside a Claude Code chat, run `/mcp__cctree__export_architecture tree=auth-platform` for a diagram of how the decisions connect across the topic.
 
 ### When NOT to use cctree
 
@@ -416,13 +416,13 @@ cctree rename "Auth v3" --tree auth-service-v2     # target a non-active tree
 | Command | Output | Audience |
 | --- | --- | --- |
 | `cctree export mermaid` | A Mermaid `graph TD` block (structure) | Quick paste-in for PRs, docs, release notes |
-| `cctree export mermaid --architecture` | A Mermaid diagram of decisions/flows derived from the tree's content via Anthropic | PR descriptions and retros that need to show *what was decided*, not *which sessions ran* |
+| `/mcp__cctree__export_architecture` (in chat) | An architecture artifact (Mermaid diagram, standalone HTML page, ASCII diagram, …) synthesized by the Claude in your chat from the tree's TL;DRs + Decisions + Artifacts | PR descriptions and retros that need to show *what was decided*, not *which sessions ran* |
 | `cctree export obsidian <vault>` | Wiki-linked markdown in an Obsidian vault | Navigable "brain"-style graph view |
 | `cctree export report <tree>` | Shareable markdown progress report | Sprint-level visibility for a tech lead |
 
-All three are also exposed as MCP tools (`export_mermaid`, `export_obsidian`, `export_report`) so Claude can invoke them directly when you ask — see the [MCP Tools section](#mcp-tools-inside-claude-code) below.
+All four are also exposed via MCP — `export_mermaid`, `export_obsidian`, `export_report` are tools Claude can invoke directly; `export_architecture` is both a slash-command prompt and a `get_architecture_context` tool. See the [MCP Tools section](#mcp-tools-inside-claude-code) below.
 
-### `cctree export mermaid [--tree <name>] [--output <file>] [--architecture]`
+### `cctree export mermaid [--tree <name>] [--output <file>]`
 
 Render the session trees as a [Mermaid](https://mermaid.js.org/) graph diagram. GitHub, Obsidian, Notion, and VSCode all render Mermaid natively, so the output pastes directly into PR descriptions, docs, or release notes.
 
@@ -443,47 +443,23 @@ graph TD
   auth_service_v2 --> auth_service_v2__api_implementation["API Implementation<br/>⚡ active"]
 ```
 
-#### `--architecture` (LLM-generated decision diagram)
+#### Architecture view: `/mcp__cctree__export_architecture` (inside the chat)
 
-The default mode draws the **structure** of the tree. Add `--architecture --tree <name>` and cctree calls Anthropic with the committed sessions' TL;DR + Decisions + Artifacts and asks for a Mermaid diagram of the architectural decisions, components, and flows that emerge across them. The model picks the diagram type (flowchart, sequence, state, class, ER) based on what fits.
+The CLI export above draws the **structure** of the tree. For the **architecture** view — decisions, components, and flows derived from the committed session summaries — the work happens inside a Claude Code chat instead of the terminal. There is no `ANTHROPIC_API_KEY` to set: the Claude already in your chat reads the branch context via the cctree MCP server and synthesizes the artifact directly.
 
-```bash
-ANTHROPIC_API_KEY=sk-... cctree export mermaid --architecture --tree mcp-release
-ANTHROPIC_API_KEY=sk-... cctree export mermaid --architecture --tree mcp-release -o arch.mmd
-```
+Two ways to trigger it:
 
-- Requires `ANTHROPIC_API_KEY` in the environment. Without it the command exits with a clear message; the deterministic structural mode (no flag) is always available as the fallback.
-- Sends only TL;DR + Decisions + Artifacts — Open Questions / Next Steps / Details stay on disk and are never uploaded.
-- The system prompt is marked for ephemeral prompt caching, so repeated runs against trees with the same shape pay near-zero for the system prefix.
-- Output is the raw Mermaid source (no fences, no commentary). Token usage and cache stats are printed to stderr.
+1. **Slash command (explicit):** type `/mcp__cctree__export_architecture` in the chat. Optional arguments:
+   - `tree=<name-or-slug>` — defaults to the active tree.
+   - `format=mermaid|html|ascii|auto` — defaults to `auto`. `mermaid` asks Claude to pick the best Mermaid diagram type (flowchart/sequence/state/class/ER); `html` asks for a self-contained HTML+CSS+JS page; `ascii` asks for a terminal-friendly diagram; `auto` lets Claude pick.
+2. **Conversational:** just ask "show me the architecture of this branch" and Claude will call the `get_architecture_context` tool autonomously, then produce whichever artifact fits.
 
-Example output for an MCP release tree (the model chose `flowchart LR`; for stateful flows it'd pick `sequenceDiagram` or `stateDiagram-v2`):
+What gets sent to Claude: TL;DR + Decisions + Artifacts + Open Questions + Next Steps for every committed child, plus the union of file paths touched across them. Details/raw notes stay on disk.
 
-```mermaid
-flowchart LR
-  Spec[MCP spec] --> Transport{Transport choice}
-  Transport -->|chosen| Stdio[stdio]
-  Transport -.->|rejected| SSE[SSE]
-  Stdio --> Server[src/server.ts]
-  Server --> Tools[Tool registry]
-  Tools --> CommitTool[commit_to_parent]
-  Tools --> ContextTool[get_sibling_context]
-  CommitTool --> Validator[summary-validator]
-  Validator --> Layered[Layered TL;DR + Decisions + Artifacts]
-  Layered --> Inject[Inject into next sibling]
-```
-
-Compare to the structural mode of the same tree:
-
-```mermaid
-graph TD
-  mcp_release["<b>MCP Release</b><br/>(mcp-release)<br/>3 committed"]
-  mcp_release --> mcp_release__transport_research["Transport research<br/>✓ Mar 12"]
-  mcp_release --> mcp_release__server_skeleton["Server skeleton<br/>✓ Mar 14"]
-  mcp_release --> mcp_release__tool_registration["Tool registration<br/>✓ Mar 16"]
-```
-
-Both have their place. Use structural to remember *what sessions ran when*; use architecture to remember *what got decided and how it fits together*.
+Example asks once `get_architecture_context` is available in your chat:
+- *"Generate a Mermaid flowchart of how these decisions connect."*
+- *"Build a single-file HTML page that visualizes this branch's architecture and save it to `docs/branch-arch.html`."*
+- *"Give me an ASCII diagram I can paste into a PR description."*
 
 ### `cctree export obsidian <vault-path> [--tree <name>]`
 
@@ -638,6 +614,24 @@ You: draw me a diagram of where we are across all releases
 Claude: [uses export_mermaid] → pastes the diagram into chat, which your
         client renders natively
 ```
+
+### `get_architecture_context` and `/mcp__cctree__export_architecture`
+
+`get_architecture_context` is the **architecture** counterpart to `export_mermaid`. Instead of drawing the tree's structure, it returns the **content** of the branch: every committed child's TL;DR + Decisions + Artifacts + Open Questions + Next Steps, plus the union of file paths touched. Claude then synthesizes whatever artifact you ask for — Mermaid (any diagram type), a standalone HTML+CSS+JS page, an ASCII diagram — using its own model. No `ANTHROPIC_API_KEY` required; the inference happens in the Claude that's already running your chat.
+
+Two ways to invoke:
+
+```
+You: /mcp__cctree__export_architecture format=mermaid
+Claude: [reads the prompt, which embeds the branch context] → produces a
+        mermaid flowchart connecting the decisions and the files they touched
+
+You: build me a self-contained HTML page that visualizes this branch
+Claude: [calls get_architecture_context tree="active-tree"] → produces an
+        HTML+CSS+JS page and offers to save it via the Write tool
+```
+
+The slash-command prompt accepts optional `tree=<name-or-slug>` and `format=mermaid|html|ascii|auto` (default `auto`). The tool accepts the same `tree` plus `format=markdown|json` for the serialization of the returned context.
 
 ### `export_obsidian`
 
